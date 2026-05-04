@@ -2,7 +2,6 @@ import os
 import telebot
 import pymysql.cursors
 import gspread
-import pandas as pd
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -25,7 +24,6 @@ connection = pymysql.connect(host=DB_HOST,
                              port=DB_PORT,
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
-cursor = connection.cursor()
 
 gc = gspread.service_account(filename=GS_CREDS_PATH)
 sh = gc.open(GS_NAME)
@@ -34,23 +32,21 @@ data = worksheet.get_all_records()
 
 @bot.message_handler(commands=["start"])
 def start(message):
-        sql = f"select * from users where tgId = {message.from_user.id};"
-        cursor.execute(sql)
+    results = []
+
+    with connection.cursor() as cursor:
+        sql = f"select * from users where tgId = %s;"
+        cursor.execute(sql, message.from_user.id)
         results = cursor.fetchall()
 
-        if len(results) > 0:
-            kb = InlineKeyboardMarkup(row_width=2)
-            btnPrice = InlineKeyboardButton("Прайс-лист", callback_data="btnPrice")
-            btnAppoint = InlineKeyboardButton("Запис", callback_data="btnAppoint")
-            kb.add(btnPrice, btnAppoint)
+    if len(results) > 0:
+        bot.send_message(message.chat.id, "Манікюрна баби галі", reply_markup=initial_keyboard())
 
-            bot.send_message(message.chat.id, "Манікюрна баби галі", reply_markup=kb)
+    else:
+        msg = bot.send_message(message.chat.id, "Привіт! Щоб продовжити, вам необхідно авторизуватись.\n" +
+                                          "Надішліть, будь ласка, свій номер телефону")
 
-        else:
-            msg = bot.send_message(message.chat.id, "Привіт! Щоб продовжити, вам необхідно авторизуватись.\n" +
-                                              "Надішліть, будь ласка, свій номер телефону")
-
-            bot.register_next_step_handler(msg, get_phone)
+        bot.register_next_step_handler(msg, get_phone)
 
 @bot.callback_query_handler(lambda call:True)
 def callback(call):
@@ -82,12 +78,13 @@ def get_name(message, user_data):
         cursor.execute(sql, (name, phone, message.from_user.id))
         connection.commit()
 
+    bot.send_message(message.chat.id, f"Авторизація пройшла успішно!", reply_markup=initial_keyboard())
+
+def initial_keyboard():
     kb = InlineKeyboardMarkup(row_width=2)
     btnPrice = InlineKeyboardButton("Прайс-лист", callback_data="btnPrice")
     btnAppoint = InlineKeyboardButton("Запис", callback_data="btnAppoint")
     kb.add(btnPrice, btnAppoint)
-
-    bot.send_message(message.chat.id, f"Авторизація пройшла успішно!", reply_markup=kb)
-
+    return kb
 
 bot.polling(none_stop=True)
