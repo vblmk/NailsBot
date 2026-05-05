@@ -4,6 +4,10 @@ import pymysql.cursors
 import gspread
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+import pandas as pd
+from gspread_dataframe import get_as_dataframe
+
+from tools import generate_schedule, initial_keyboard
 
 load_dotenv()
 
@@ -17,29 +21,25 @@ GS_CREDS_PATH = os.getenv('GS_CREDS_PATH')
 GS_NAME = os.getenv('GS_NAME')
 
 bot = telebot.TeleBot(TOKEN)
-connection = pymysql.connect(host=DB_HOST,
-                             user=DB_USER,
-                             password=DB_PASSWORD,
-                             db=DB_NAME,
-                             port=DB_PORT,
-                             charset='utf8mb4',
-                             cursorclass=pymysql.cursors.DictCursor)
+# connection = pymysql.connect(host=DB_HOST,
+#                              user=DB_USER,
+#                              password=DB_PASSWORD,
+#                              db=DB_NAME,
+#                              port=DB_PORT,
+#                              charset='utf8mb4',
+#                              cursorclass=pymysql.cursors.DictCursor)
 
 gc = gspread.service_account(filename=GS_CREDS_PATH)
 sh = gc.open(GS_NAME)
-worksheet = sh.worksheet("Sheet1")
-data = worksheet.get_all_records()
+scedule_ws = sh.worksheet(os.getenv('SCHEDULE_WORKSHEET'))
+data_ws = sh.worksheet(os.getenv("DATA_WORKSHEET"))
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    results = []
+    df = get_as_dataframe(data_ws)
+    result = df.query("TgId == @message.from_user.id").to_dict("records")
 
-    with connection.cursor() as cursor:
-        sql = f"select * from users where tgId = %s;"
-        cursor.execute(sql, message.from_user.id)
-        results = cursor.fetchall()
-
-    if len(results) > 0:
+    if len(result) > 0:
         bot.send_message(message.chat.id, "Манікюрна баби галі", reply_markup=initial_keyboard())
 
     else:
@@ -55,11 +55,10 @@ def callback(call):
                                                        " - Ноготочкі: 700грн\n"+
                                                        " - Бровкі: 400грн\n"+
                                                        " - Глазкі: 500грн")
-
         if call.data == "btnAppoint":
-                bot.send_message(call.message.chat.id, "ну вот і всьо (┬﹏┬)")
+            bot.answer_callback_query(call.id, text="to be done...")
 
-        bot.answer_callback_query(call.id, text="Processed!")
+        bot.answer_callback_query(call.id, text='')
 
 def get_phone(message):
     phone = message.text
@@ -73,18 +72,8 @@ def get_name(message, user_data):
     phone = user_data['phone']
     tg_id = message.from_user.id
 
-    with connection.cursor() as cursor:
-        sql = "INSERT INTO users (name, phoneNumber, tgId) VALUES (%s, %s, %s)"
-        cursor.execute(sql, (name, phone, message.from_user.id))
-        connection.commit()
+    data_ws.append_row([name, phone, tg_id])
 
     bot.send_message(message.chat.id, f"Авторизація пройшла успішно!", reply_markup=initial_keyboard())
-
-def initial_keyboard():
-    kb = InlineKeyboardMarkup(row_width=2)
-    btnPrice = InlineKeyboardButton("Прайс-лист", callback_data="btnPrice")
-    btnAppoint = InlineKeyboardButton("Запис", callback_data="btnAppoint")
-    kb.add(btnPrice, btnAppoint)
-    return kb
 
 bot.polling(none_stop=True)
