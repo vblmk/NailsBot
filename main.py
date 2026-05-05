@@ -1,13 +1,10 @@
 import os
 import telebot
-import pymysql.cursors
 import gspread
 from dotenv import load_dotenv
-from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
-import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
-from tools import generate_schedule, initial_keyboard
+from tools import initial_keyboard
 
 load_dotenv()
 
@@ -21,13 +18,6 @@ GS_CREDS_PATH = os.getenv('GS_CREDS_PATH')
 GS_NAME = os.getenv('GS_NAME')
 
 bot = telebot.TeleBot(TOKEN)
-# connection = pymysql.connect(host=DB_HOST,
-#                              user=DB_USER,
-#                              password=DB_PASSWORD,
-#                              db=DB_NAME,
-#                              port=DB_PORT,
-#                              charset='utf8mb4',
-#                              cursorclass=pymysql.cursors.DictCursor)
 
 gc = gspread.service_account(filename=GS_CREDS_PATH)
 sh = gc.open(GS_NAME)
