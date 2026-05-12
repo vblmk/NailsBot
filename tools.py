@@ -10,8 +10,7 @@ load_dotenv()
 
 gc = gspread.service_account(filename=os.getenv('GS_CREDS_PATH'))
 sh = gc.open(os.getenv('GS_NAME'))
-worksheet = sh.worksheet(os.getenv('SCHEDULE_WORKSHEET'))
-
+schedule_ws = sh.worksheet(os.getenv('SCHEDULE_WORKSHEET'))
 
 def generate_schedule():
     start_date = datetime.now().date()
@@ -33,13 +32,13 @@ def generate_schedule():
             })
 
     df_new_schedule = pd.DataFrame(slots)
-    worksheet.clear()
+    schedule_ws.clear()
+    set_with_dataframe(schedule_ws, df_new_schedule)
 
-    set_with_dataframe(worksheet, df_new_schedule)
     print(f"Згенеровано розклад на {days_to_generate} днів!")
 
 def get_schedule():
-    data = worksheet.get_all_records()
+    data = schedule_ws.get_all_records()
     df = pd.DataFrame(data)
     filtered_df = df[df['Status'] == 'Available']
 
@@ -50,6 +49,7 @@ def initial_keyboard():
     btnPrice = InlineKeyboardButton("Прайс-лист", callback_data="btnPrice")
     btnAppoint = InlineKeyboardButton("Запис", callback_data="btnAppoint")
     kb.add(btnPrice, btnAppoint)
+
     return kb
 
 if __name__ == "__main__":

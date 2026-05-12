@@ -8,7 +8,7 @@ from tools import initial_keyboard
 load_dotenv()
 
 DB_HOST            = os.getenv('DB_HOST')
-DB_PORT            = int(os.getenv('DB_PORT'))
+DB_PORT        = int(os.getenv('DB_PORT'))
 DB_USER            = os.getenv('DB_USER')
 DB_PASSWORD        = os.getenv('DB_PASSWORD')
 DB_NAME            = os.getenv('DB_NAME')
@@ -20,10 +20,10 @@ DATA_WORKSHEET     = os.getenv("DATA_WORKSHEET")
 
 bot = telebot.TeleBot(TOKEN)
 
-gc         = gspread.service_account(filename=GS_CREDS_PATH)
-sh         = gc.open(GS_NAME)
-scedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
-data_ws    = sh.worksheet(DATA_WORKSHEET)
+gc          = gspread.service_account(filename=GS_CREDS_PATH)
+sh          = gc.open(GS_NAME)
+schedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
+data_ws     = sh.worksheet(DATA_WORKSHEET)
 
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -60,7 +60,6 @@ def get_name(message, user_data):
     name = message.text
     phone = user_data['phone']
     tg_id = message.from_user.id
-
     data_ws.append_row([name, phone, tg_id])
 
     bot.send_message(message.chat.id, f"Авторизація пройшла успішно!", reply_markup=initial_keyboard())
