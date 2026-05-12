@@ -24,7 +24,7 @@ def generate_schedule():
         for hour in range(9, 19):
             time_str = f"{hour:02d}:00"
             slots.append({
-                "Date": current_date.strftime("%Y-%m-%d"),
+                "Date": current_date.strftime("%d-%m-%Y"),
                 "Time": time_str,
                 "Name": "",
                 "Phone": "",
@@ -38,6 +38,12 @@ def generate_schedule():
     set_with_dataframe(worksheet, df_new_schedule)
     print(f"Згенеровано розклад на {days_to_generate} днів!")
 
+def get_schedule():
+    data = worksheet.get_all_records()
+    df = pd.DataFrame(data)
+    filtered_df = df[df['Status'] == 'Available']
+
+    return filtered_df
 
 def initial_keyboard():
     kb = InlineKeyboardMarkup(row_width=2)
@@ -47,4 +53,4 @@ def initial_keyboard():
     return kb
 
 if __name__ == "__main__":
-    generate_schedule()
+    get_schedule()

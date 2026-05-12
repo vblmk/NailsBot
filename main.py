@@ -3,26 +3,27 @@ import telebot
 import gspread
 from dotenv import load_dotenv
 from gspread_dataframe import get_as_dataframe
-
 from tools import initial_keyboard
 
 load_dotenv()
 
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT=int(os.getenv('DB_PORT'))
-DB_USER=os.getenv('DB_USER')
-DB_PASSWORD=os.getenv('DB_PASSWORD')
-DB_NAME=os.getenv('DB_NAME')
-TOKEN = os.getenv('TOKEN')
-GS_CREDS_PATH = os.getenv('GS_CREDS_PATH')
-GS_NAME = os.getenv('GS_NAME')
+DB_HOST            = os.getenv('DB_HOST')
+DB_PORT            = int(os.getenv('DB_PORT'))
+DB_USER            = os.getenv('DB_USER')
+DB_PASSWORD        = os.getenv('DB_PASSWORD')
+DB_NAME            = os.getenv('DB_NAME')
+TOKEN              = os.getenv('TOKEN')
+GS_CREDS_PATH      = os.getenv('GS_CREDS_PATH')
+GS_NAME            = os.getenv('GS_NAME')
+SCHEDULE_WORKSHEET = os.getenv('SCHEDULE_WORKSHEET')
+DATA_WORKSHEET     = os.getenv("DATA_WORKSHEET")
 
 bot = telebot.TeleBot(TOKEN)
 
-gc = gspread.service_account(filename=GS_CREDS_PATH)
-sh = gc.open(GS_NAME)
-scedule_ws = sh.worksheet(os.getenv('SCHEDULE_WORKSHEET'))
-data_ws = sh.worksheet(os.getenv("DATA_WORKSHEET"))
+gc         = gspread.service_account(filename=GS_CREDS_PATH)
+sh         = gc.open(GS_NAME)
+scedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
+data_ws    = sh.worksheet(DATA_WORKSHEET)
 
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -51,10 +52,8 @@ def callback(call):
         bot.answer_callback_query(call.id, text='')
 
 def get_phone(message):
-    phone = message.text
-    user_data = {'phone' : phone}
+    user_data = {'phone' : message.text}
     msg = bot.send_message(message.chat.id, "Як до вас можна звертатись?")
-
     bot.register_next_step_handler(msg, get_name, user_data)
 
 def get_name(message, user_data):
