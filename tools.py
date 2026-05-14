@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import gspread
-from gspread_dataframe import set_with_dataframe
+from gspread_dataframe import set_with_dataframe, get_as_dataframe
 import os
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -52,5 +52,37 @@ def initial_keyboard():
 
     return kb
 
+def appoint(date, time, name, phone, id):
+    df = get_as_dataframe(schedule_ws)
+    row_index = df[(df['Date'] == date) & (df['Time'] == time)].index[0] + 2
+
+    new_values = [[name, phone, id, 'Booked']]
+    schedule_ws.update(new_values, f'C{row_index}:F{row_index}')
+
+
+def create_pagination_kb(df, page=0, limit=5):
+    kb = InlineKeyboardMarkup()
+
+    start = page * limit
+    end = start + limit
+
+    current_rows = df.iloc[start:end]
+
+    for index, row in current_rows.iterrows():
+        btn_text = f"{row['Date']} {row['Time']}"
+        kb.add(InlineKeyboardButton(btn_text, callback_data=f"book_{index}"))
+
+    nav_btns = []
+    if page > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"page_{page - 1}"))
+
+    if end < len(df):
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"page_{page + 1}"))
+
+    if nav_btns:
+        kb.row(*nav_btns)
+
+    return kb
+
 if __name__ == "__main__":
-    get_schedule()
+    generate_schedule()

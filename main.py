@@ -1,9 +1,12 @@
 import os
+import pandas as pd
 import telebot
 import gspread
 from dotenv import load_dotenv
 from gspread_dataframe import get_as_dataframe
-from tools import initial_keyboard
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+from tools import initial_keyboard, get_schedule, create_pagination_kb, appoint
 
 load_dotenv()
 
@@ -39,25 +42,105 @@ def start(message):
 
         bot.register_next_step_handler(msg, get_phone)
 
-@bot.callback_query_handler(lambda call:True)
-def callback(call):
-        if call.data == "btnPrice":
-                bot.send_message(call.message.chat.id, "💸 Прайс:\n"+
-                                                       " - Ноготочкі: 700грн\n"+
-                                                       " - Бровкі: 400грн\n"+
-                                                       " - Глазкі: 500грн")
-        if call.data == "btnAppoint":
-            bot.answer_callback_query(call.id, text="to be done...")
+@bot.callback_query_handler(func=lambda call: call.data.startswith("page_"))
+def handle_pagination(call):
+    page = int(call.data.split("_")[1])
+    df = get_schedule()
 
-        bot.answer_callback_query(call.id, text='')
+    kb = create_pagination_kb(df, page=page)
+
+    bot.edit_message_reply_markup(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=kb
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("book_"))
+def handle_booking(call):
+    data = schedule_ws.get_all_records()
+    df_full = pd.DataFrame(data)
+
+    df_index = int(call.data.split("_")[1])
+
+    try:
+        if df_index not in df_full.index:
+            bot.answer_callback_query(call.id, "Цей запис більше не існує.", show_alert=True)
+            return
+
+        row = df_full.loc[df_index]
+        date = row['Date']
+        time = row['Time']
+        status = row['Status']
+
+        if status != 'Available':
+            bot.answer_callback_query(call.id, "На жаль, цей час уже зайнятий!", show_alert=True)
+            return
+
+        df_users = get_as_dataframe(data_ws)
+        user_id = call.from_user.id
+
+        user_record = df_users[df_users['TgId'].astype(float) == float(user_id)].to_dict("records")
+
+        if user_record:
+            user = user_record[0]
+            appoint(date, time, user['Name'], user['PhoneNumber'], user_id)
+
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"✅ Ви успішно записані!\n📅 Дата: {date}\n⏰ Час: {time}\n\nЧекаємо на вас!",
+                reply_markup=None
+            )
+            bot.send_message(call.message.chat.id, "Бажаєте щось ще?", reply_markup=initial_keyboard())
+        else:
+            bot.answer_callback_query(call.id, "Користувача не знайдено. Натисніть /start", show_alert=True)
+
+    except Exception as e:
+        print(f"Помилка бронювання: {e}")
+        bot.answer_callback_query(call.id, "Сталася технічна помилка.", show_alert=True)
+
+
+@bot.callback_query_handler(lambda call: True)
+def callback(call):
+    if call.data == "btnPrice":
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="main_menu"))
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text="💸 Прайс:\n - Ноготочкі: 700грн\n - Бровкі: 400грн\n - Глазкі: 500грн",
+            reply_markup=kb
+        )
+
+    elif call.data == "main_menu":
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text="Манікюрна баби галі",
+            reply_markup=initial_keyboard()
+        )
+
+    if call.data == "btnAppoint":
+        df = get_schedule()
+        if df.empty:
+            bot.answer_callback_query(call.id, "Наразі вільних вікон немає.", show_alert=True)
+        else:
+            kb = create_pagination_kb(df, page=0)
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text="Виберіть дату та час:",
+                reply_markup=kb
+            )
 
 def get_phone(message):
-    user_data = {'phone' : message.text}
+    user_data = {'phone' : message.text.strip()}
     msg = bot.send_message(message.chat.id, "Як до вас можна звертатись?")
     bot.register_next_step_handler(msg, get_name, user_data)
 
 def get_name(message, user_data):
-    name = message.text
+    name = message.text.strip()
     phone = user_data['phone']
     tg_id = message.from_user.id
     data_ws.append_row([name, phone, tg_id])
