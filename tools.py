@@ -59,9 +59,36 @@ def appoint(date, time, name, phone, id):
     new_values = [[name, phone, id, 'Booked']]
     schedule_ws.update(new_values, f'C{row_index}:F{row_index}')
 
-
-def create_pagination_kb(df, page=0, limit=5):
+def create_pagination_kb_date(df, page=0, limit=5):
     kb = InlineKeyboardMarkup()
+    unique_dates = df['Date'].unique()
+
+    start = page * limit
+    end = start + limit
+
+    current_dates = unique_dates[start:end]
+
+    for date_val in current_dates:
+        first_index = df[df['Date'] == date_val].index[0]
+
+        kb.add(InlineKeyboardButton(text=str(date_val), callback_data=f"date_{first_index}"))
+
+    nav_btns = []
+    if page > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagedate_{page - 1}"))
+
+    if end < len(df):
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagedate_{page + 1}"))
+
+    if nav_btns:
+        kb.row(*nav_btns)
+
+    return kb
+
+def create_pagination_kb_time(df, date, page=0, limit=5):
+    kb = InlineKeyboardMarkup()
+
+    df = df[df['Date'] == date]
 
     start = page * limit
     end = start + limit
@@ -69,15 +96,15 @@ def create_pagination_kb(df, page=0, limit=5):
     current_rows = df.iloc[start:end]
 
     for index, row in current_rows.iterrows():
-        btn_text = f"{row['Date']} {row['Time']}"
+        btn_text = f"{row['Time']}"
         kb.add(InlineKeyboardButton(btn_text, callback_data=f"book_{index}"))
 
     nav_btns = []
     if page > 0:
-        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"page_{page - 1}"))
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagetime_{date}_{page - 1}"))
 
     if end < len(df):
-        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"page_{page + 1}"))
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagetime_{date}_{page + 1}"))
 
     if nav_btns:
         kb.row(*nav_btns)

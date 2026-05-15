@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from gspread_dataframe import get_as_dataframe
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from tools import initial_keyboard, get_schedule, create_pagination_kb, appoint
+from tools import initial_keyboard, get_schedule, create_pagination_kb_date, create_pagination_kb_time, appoint
 
 load_dotenv()
 
@@ -42,12 +42,48 @@ def start(message):
 
         bot.register_next_step_handler(msg, get_phone)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("page_"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("pagedate_"))
 def handle_pagination(call):
     page = int(call.data.split("_")[1])
     df = get_schedule()
 
-    kb = create_pagination_kb(df, page=page)
+    kb = create_pagination_kb_date(df, page=page)
+
+    bot.edit_message_reply_markup(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=kb
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("date_"))
+def handle_pagination(call):
+    df_index = int(call.data.split("_")[1])
+    df = get_schedule()
+
+    data = schedule_ws.get_all_records()
+    df_full = pd.DataFrame(data)
+
+    row = df_full.loc[df_index]
+    date = row['Date']
+
+    kb = create_pagination_kb_time(df, date)
+
+    bot.edit_message_text("Виберіть час:", call.message.chat.id, call.message.message_id)
+
+    bot.edit_message_reply_markup(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=kb
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("pagetime_"))
+def handle_pagination(call):
+    date = call.data.split("_")[1]
+    page = int(call.data.split("_")[2])
+
+    df = get_schedule()
+
+    kb = create_pagination_kb_time(df, date, page=page)
 
     bot.edit_message_reply_markup(
         chat_id=call.message.chat.id,
@@ -90,9 +126,8 @@ def handle_booking(call):
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
                 text=f"✅ Ви успішно записані!\n📅 Дата: {date}\n⏰ Час: {time}\n\nЧекаємо на вас!",
-                reply_markup=None
+                reply_markup=initial_keyboard()
             )
-            bot.send_message(call.message.chat.id, "Бажаєте щось ще?", reply_markup=initial_keyboard())
         else:
             bot.answer_callback_query(call.id, "Користувача не знайдено. Натисніть /start", show_alert=True)
 
@@ -126,11 +161,11 @@ def callback(call):
         if df.empty:
             bot.answer_callback_query(call.id, "Наразі вільних вікон немає.", show_alert=True)
         else:
-            kb = create_pagination_kb(df, page=0)
+            kb = create_pagination_kb_date(df, page=0)
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                text="Виберіть дату та час:",
+                text="Виберіть дату:",
                 reply_markup=kb
             )
 
