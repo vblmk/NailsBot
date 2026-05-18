@@ -65,25 +65,26 @@ def create_pagination_kb_date(df, page=0, limit=5):
 
     start = page * limit
     end = start + limit
-
     current_dates = unique_dates[start:end]
 
     for date_val in current_dates:
         first_index = df[df['Date'] == date_val].index[0]
-
         kb.add(InlineKeyboardButton(text=str(date_val), callback_data=f"date_{first_index}"))
 
     nav_btns = []
     if page > 0:
         nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagedate_{page - 1}"))
 
-    if end < len(df):
+    if end < len(unique_dates):
         nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagedate_{page + 1}"))
 
     if nav_btns:
         kb.row(*nav_btns)
 
+    kb.add(InlineKeyboardButton("🏠 Головне меню", callback_data="main_menu"))
+
     return kb
+
 
 def create_pagination_kb_time(df, date, page=0, limit=5):
     kb = InlineKeyboardMarkup()
@@ -92,7 +93,6 @@ def create_pagination_kb_time(df, date, page=0, limit=5):
 
     start = page * limit
     end = start + limit
-
     current_rows = df.iloc[start:end]
 
     for index, row in current_rows.iterrows():
@@ -108,6 +108,8 @@ def create_pagination_kb_time(df, date, page=0, limit=5):
 
     if nav_btns:
         kb.row(*nav_btns)
+
+    kb.add(InlineKeyboardButton("🔙 До списку дат", callback_data="back_to_dates"))
 
     return kb
 

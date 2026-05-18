@@ -28,8 +28,12 @@ sh          = gc.open(GS_NAME)
 schedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
 data_ws     = sh.worksheet(DATA_WORKSHEET)
 
+user_df = {}
+
 @bot.message_handler(commands=["start"])
 def start(message):
+    user_df.pop(message.from_user.id, None)
+
     df = get_as_dataframe(data_ws)
     result = df.query("TgId == @message.from_user.id").to_dict("records")
 
@@ -43,9 +47,9 @@ def start(message):
         bot.register_next_step_handler(msg, get_phone)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pagedate_"))
-def handle_pagination(call):
+def handle_date_pagination(call):
     page = int(call.data.split("_")[1])
-    df = get_schedule()
+    df = user_df[call.from_user.id]
 
     kb = create_pagination_kb_date(df, page=page)
 
@@ -56,32 +60,28 @@ def handle_pagination(call):
     )
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("date_"))
-def handle_pagination(call):
+def handle_date_selection(call):
     df_index = int(call.data.split("_")[1])
-    df = get_schedule()
+    df = user_df[call.from_user.id]
 
-    data = schedule_ws.get_all_records()
-    df_full = pd.DataFrame(data)
-
-    row = df_full.loc[df_index]
+    row = df.loc[df_index]
     date = row['Date']
 
     kb = create_pagination_kb_time(df, date)
 
-    bot.edit_message_text("Виберіть час:", call.message.chat.id, call.message.message_id)
-
-    bot.edit_message_reply_markup(
+    bot.edit_message_text(
+        text="Виберіть час:",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         reply_markup=kb
     )
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pagetime_"))
-def handle_pagination(call):
+def handle_time_pagination(call):
     date = call.data.split("_")[1]
     page = int(call.data.split("_")[2])
 
-    df = get_schedule()
+    df = user_df[call.from_user.id]
 
     kb = create_pagination_kb_time(df, date, page=page)
 
@@ -94,6 +94,8 @@ def handle_pagination(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("book_"))
 def handle_booking(call):
+    user_df.pop(call.from_user.id, None)
+
     data = schedule_ws.get_all_records()
     df_full = pd.DataFrame(data)
 
@@ -139,6 +141,8 @@ def handle_booking(call):
 @bot.callback_query_handler(lambda call: True)
 def callback(call):
     if call.data == "btnPrice":
+        user_df.pop(call.from_user.id, None)
+
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="main_menu"))
         bot.edit_message_text(
@@ -149,6 +153,8 @@ def callback(call):
         )
 
     elif call.data == "main_menu":
+        user_df.pop(call.from_user.id, None)
+
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
@@ -156,8 +162,30 @@ def callback(call):
             reply_markup=initial_keyboard()
         )
 
+    elif call.data == "back_to_dates":
+        bot.answer_callback_query(call.id)
+
+        df = user_df.get(call.from_user.id)
+
+        if df is None:
+            df = get_schedule()
+            user_df[call.from_user.id] = df
+
+        if df.empty:
+            bot.answer_callback_query(call.id, "Наразі вільних вікон немає.", show_alert=True)
+        else:
+            kb = create_pagination_kb_date(df, page=0)
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text="Виберіть дату:",
+                reply_markup=kb
+            )
+
     if call.data == "btnAppoint":
-        df = get_schedule()
+        user_df[call.from_user.id] = get_schedule()
+        df = user_df[call.from_user.id]
+
         if df.empty:
             bot.answer_callback_query(call.id, "Наразі вільних вікон немає.", show_alert=True)
         else:
