@@ -1,4 +1,7 @@
 import os
+import threading
+import time
+from datetime import datetime, timedelta
 import pandas as pd
 import telebot
 import gspread
@@ -29,6 +32,45 @@ schedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
 data_ws     = sh.worksheet(DATA_WORKSHEET)
 
 user_df = {}
+
+def reminder_loop():
+    while True:
+        try:
+            data = schedule_ws.get_all_records()
+            now = datetime.now()
+
+            for i, row in enumerate(data):
+                if row["Status"] == "Available" or not row["UserID"]:
+                    continue
+
+                try:
+                    appoint_dt = datetime.strptime(f"{row['Date']} {row['Time']}", "%d-%m-%Y %H:%M")
+                except ValueError:
+                    continue
+
+                time_left = appoint_dt - now
+                user_id = int(float(row["UserID"]))
+                row_idx = i + 2
+
+                if timedelta(days=6, hours=23) < time_left <= timedelta(days=7):
+                    if str(row.get("Rem_7d")).upper() != "TRUE":
+                        bot.send_message(user_id, f"🔔 Нагадування: Через тиждень ({row['Date']}) чекаємо вас о {row['Time']}! ✨")
+                        schedule_ws.update_cell(row_idx, 7, True)
+
+                elif timedelta(days=2, hours=23) < time_left <= timedelta(days=3):
+                    if str(row.get("Rem_3d")).upper() != "TRUE":
+                        bot.send_message(user_id, f"🗓 Нагадування: Через 3 дні ({row['Date']}) у вас запис о {row['Time']}. 👍")
+                        schedule_ws.update_cell(row_idx, 8, True)
+
+                elif timedelta(minutes=0) < time_left <= timedelta(hours=1):
+                    if str(row.get("Rem_1h")).upper() != "TRUE":
+                        bot.send_message(user_id, f"⏰ Нагадування: Ваш запис уже за годину (о {row['Time']})! Чекаємо на вас. 😉")
+                        schedule_ws.update_cell(row_idx, 9, True)
+
+        except Exception as e:
+            print(f"Помилка у фоновому потоці нагадувань: {e}")
+
+        time.sleep(900)
 
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -210,4 +252,9 @@ def get_name(message, user_data):
 
     bot.send_message(message.chat.id, f"Авторизація пройшла успішно!", reply_markup=initial_keyboard())
 
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    bg_thread = threading.Thread(target=reminder_loop, daemon=True)
+    bg_thread.start()
+
+    print("🚀 Бот та система нагадувань успішно запущені!")
+    bot.polling(none_stop=True)

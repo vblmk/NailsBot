@@ -28,14 +28,17 @@ def generate_schedule():
                 "Name": "",
                 "Phone": "",
                 "UserID": "",
-                "Status": "Available"
+                "Status": "Available",
+                "Rem_7d": False,  # Стовпець 7 (номінально)
+                "Rem_3d": False,  # Стовпець 8
+                "Rem_1h": False   # Стовпець 9
             })
 
     df_new_schedule = pd.DataFrame(slots)
     schedule_ws.clear()
     set_with_dataframe(schedule_ws, df_new_schedule)
 
-    print(f"Згенеровано розклад на {days_to_generate} днів!")
+    print(f"Згенеровано розклад на {days_to_generate} днів із полями нагадувань!")
 
 def get_schedule():
     data = schedule_ws.get_all_records()
