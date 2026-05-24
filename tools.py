@@ -10,9 +10,8 @@ load_dotenv()
 
 gc = gspread.service_account(filename=os.getenv('GS_CREDS_PATH'))
 sh = gc.open(os.getenv('GS_NAME'))
-schedule_ws = sh.worksheet(os.getenv('SCHEDULE_WORKSHEET'))
 
-def generate_schedule():
+def generate_schedule(schedule_ws):
     start_date = datetime.now().date()
     days_to_generate = 14
     slots = []
@@ -40,7 +39,7 @@ def generate_schedule():
 
     print(f"Згенеровано розклад на {days_to_generate} днів із полями нагадувань!")
 
-def get_schedule():
+def get_schedule(schedule_ws):
     data = schedule_ws.get_all_records()
     df = pd.DataFrame(data)
     filtered_df = df[df['Status'] == 'Available']
@@ -55,7 +54,7 @@ def initial_keyboard():
 
     return kb
 
-def appoint(date, time, name, phone, id):
+def appoint(date, time, name, phone, id, schedule_ws):
     df = get_as_dataframe(schedule_ws)
     row_index = df[(df['Date'] == date) & (df['Time'] == time)].index[0] + 2
 

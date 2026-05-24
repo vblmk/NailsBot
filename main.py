@@ -164,7 +164,7 @@ def handle_booking(call):
 
         if user_record:
             user = user_record[0]
-            appoint(date, time, user['Name'], user['PhoneNumber'], user_id)
+            appoint(date, time, user['Name'], user['PhoneNumber'], user_id, schedule_ws)
 
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
@@ -210,7 +210,7 @@ def callback(call):
         df = user_df.get(call.from_user.id)
 
         if df is None:
-            df = get_schedule()
+            df = get_schedule(schedule_ws)
             user_df[call.from_user.id] = df
 
         if df.empty:
@@ -225,7 +225,7 @@ def callback(call):
             )
 
     if call.data == "btnAppoint":
-        user_df[call.from_user.id] = get_schedule()
+        user_df[call.from_user.id] = get_schedule(schedule_ws)
         df = user_df[call.from_user.id]
 
         if df.empty:
