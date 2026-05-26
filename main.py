@@ -8,7 +8,6 @@ import gspread
 from dotenv import load_dotenv
 from gspread_dataframe import get_as_dataframe
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 from tools import initial_keyboard, get_schedule, create_pagination_kb_date, create_pagination_kb_time, appoint
 
 load_dotenv()
@@ -23,6 +22,7 @@ GS_CREDS_PATH      = os.getenv('GS_CREDS_PATH')
 GS_NAME            = os.getenv('GS_NAME')
 SCHEDULE_WORKSHEET = os.getenv('SCHEDULE_WORKSHEET')
 DATA_WORKSHEET     = os.getenv("DATA_WORKSHEET")
+SERVICES_WORKSHEET  = os.getenv("SERVICES_WORKSHEET")
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -30,8 +30,19 @@ gc          = gspread.service_account(filename=GS_CREDS_PATH)
 sh          = gc.open(GS_NAME)
 schedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
 data_ws     = sh.worksheet(DATA_WORKSHEET)
+services_ws = sh.worksheet(SERVICES_WORKSHEET)
 
 user_df = {}
+services = []
+
+def add_service(name, price):
+    if type(name) == str and (type(price) == float or type(price) == int):
+        services_ws.append_row([name, price])
+        print(f"Added service {name} - {price} to services table")
+        return True
+
+    print(f"Invalid argument type: add_service func")
+    return False
 
 def reminder_loop():
     while True:
@@ -185,12 +196,19 @@ def callback(call):
     if call.data == "btnPrice":
         user_df.pop(call.from_user.id, None)
 
+        data = services_ws.get_all_records()
+        df = pd.DataFrame(data)
+        res_text = ""
+
+        for index, row in df.iterrows():
+            res_text += f" 📌 {row['Name']} - {row['Price']}₴\n"
+
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="main_menu"))
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text="💸 Прайс:\n - Ноготочкі: 700грн\n - Бровкі: 400грн\n - Глазкі: 500грн",
+            text="💸 Прайс:\n" + res_text,
             reply_markup=kb
         )
 
