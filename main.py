@@ -1,14 +1,19 @@
 import os
 import threading
 import time
+import types
 from datetime import datetime, timedelta
 import pandas as pd
 import telebot
 import gspread
 from dotenv import load_dotenv
 from gspread_dataframe import get_as_dataframe
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from tools import initial_keyboard, get_schedule, create_pagination_kb_date, create_pagination_kb_time, appoint
+from tools import (initial_keyboard,
+                   get_schedule,
+                   create_pagination_kb_date,
+                   create_pagination_kb_time,
+                   appoint,
+                   add_service)
 
 load_dotenv()
 
@@ -34,15 +39,6 @@ services_ws = sh.worksheet(SERVICES_WORKSHEET)
 
 user_df = {}
 services = []
-
-def add_service(name, price):
-    if type(name) == str and (type(price) == float or type(price) == int):
-        services_ws.append_row([name, price])
-        print(f"Added service {name} - {price} to services table")
-        return True
-
-    print(f"Invalid argument type: add_service func")
-    return False
 
 def reminder_loop():
     while True:
@@ -198,19 +194,17 @@ def callback(call):
 
         data = services_ws.get_all_records()
         df = pd.DataFrame(data)
+
         res_text = ""
 
         for index, row in df.iterrows():
-            res_text += f" 📌 {row['Name']} - {row['Price']}₴\n"
+            res_text += f" 📌 {row['Name']}, {row['Price']}₴, {row['Duration']}\n"
+            print(type(row['Duration']))
 
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="main_menu"))
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text="💸 Прайс:\n" + res_text,
-            reply_markup=kb
-        )
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text="Наші послуги:\n" + res_text,
+                              reply_markup=initial_keyboard())
 
     elif call.data == "main_menu":
         user_df.pop(call.from_user.id, None)
@@ -242,7 +236,7 @@ def callback(call):
                 reply_markup=kb
             )
 
-    if call.data == "btnAppoint":
+    elif call.data == "btnAppoint":
         user_df[call.from_user.id] = get_schedule(schedule_ws)
         df = user_df[call.from_user.id]
 

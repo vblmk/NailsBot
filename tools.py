@@ -11,6 +11,20 @@ load_dotenv()
 gc = gspread.service_account(filename=os.getenv('GS_CREDS_PATH'))
 sh = gc.open(os.getenv('GS_NAME'))
 
+
+def add_service(name, price, duration, services_ws):
+    id_column = services_ws.col_values(1)
+
+    if len(id_column) <= 1:
+        next_id = 1
+    else:
+        numeric_ids = [int(x) for x in id_column[1:] if str(x).isdigit()]
+        next_id = max(numeric_ids) + 1 if numeric_ids else 1
+    services_ws.append_row([next_id, name, price, duration])
+
+    print(f"✅ added service #{next_id}: {name} - {price}₴")
+    return True
+
 def generate_schedule(schedule_ws):
     start_date = datetime.now().date()
     days_to_generate = 14
@@ -48,9 +62,9 @@ def get_schedule(schedule_ws):
 
 def initial_keyboard():
     kb = InlineKeyboardMarkup(row_width=2)
-    btnPrice = InlineKeyboardButton("Прайс-лист", callback_data="btnPrice")
-    btnAppoint = InlineKeyboardButton("Запис", callback_data="btnAppoint")
-    kb.add(btnPrice, btnAppoint)
+
+    kb.add(InlineKeyboardButton("Прайс-лист", callback_data="btnPrice"),
+           InlineKeyboardButton("Запис", callback_data="btnAppoint"))
 
     return kb
 
@@ -115,5 +129,16 @@ def create_pagination_kb_time(df, date, page=0, limit=5):
 
     return kb
 
+def add_master(name, ws = sh.worksheet(os.getenv("MASTERS_WORKSHEET"))):
+    id_column = ws.col_values(1)
+
+    if len(id_column) <= 1:
+        next_id = 1
+    else:
+        numeric_ids = [int(x) for x in id_column[1:] if str(x).isdigit()]
+        next_id = max(numeric_ids) + 1 if numeric_ids else 1
+
+    ws.append_row([next_id, name])
+
 if __name__ == "__main__":
-    generate_schedule()
+    generate_schedule(sh.worksheet(os.getenv('SCHEDULE_WORKSHEET')))
