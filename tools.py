@@ -1,7 +1,9 @@
 import os
 from datetime import datetime, timedelta
+import gspread
 import pandas as pd
 from dotenv import load_dotenv
+from gspread_dataframe import get_as_dataframe, set_with_dataframe
 from sqlalchemy import create_engine, text
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 load_dotenv()
@@ -11,9 +13,16 @@ DB_PORT = os.getenv('DB_PORT')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
+GS_CREDS_PATH      = os.getenv('GS_CREDS_PATH')
+GS_NAME            = os.getenv('GS_NAME')
+SCHEDULE_WORKSHEET = os.getenv('SCHEDULE_WORKSHEET')
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 engine = create_engine(DATABASE_URL)
+
+gc = gspread.service_account(filename=os.getenv('GS_CREDS_PATH'))
+sh = gc.open(os.getenv('GS_NAME'))
+schedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
 
 def add_service(name, price, duration):
     query = text("INSERT INTO services (name, price, duration) VALUES (:name, :price, :duration)")
@@ -23,30 +32,44 @@ def add_service(name, price, duration):
 def generate_schedule():
     start_date = datetime.now().date()
     days_to_generate = 14
-    slots = []
+    slots_psql = []
+    slots_gs = []
 
     for i in range(days_to_generate):
         current_date = start_date + timedelta(days=i)
 
         for hour in range(9, 19):
             time_str = f"{hour:02d}:00"
-            slots.append({
+            slots_psql.append({
                 "slot_date": current_date,
                 "slot_time": time_str,
                 "client_name": None,
                 "client_phone": None,
                 "user_id": None,
                 "status": "Available",
+                "service_id" : None,
                 "rem_7d": False,
                 "rem_3d": False,
                 "rem_1h": False
             })
 
-    df_new_schedule = pd.DataFrame(slots)
+            slots_gs.append({
+                "Дата": current_date.strftime("%d-%m-%Y"),
+                "Час": time_str,
+                "Ім'я": None,
+                "Телефон": None,
+                "Послуга": None,
+            })
+
+    df_new_schedule_psql = pd.DataFrame(slots_psql)
+    df_new_schedule_gs = pd.DataFrame(slots_gs)
+
+    schedule_ws.clear()
+    set_with_dataframe(schedule_ws, df_new_schedule_gs)
 
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE schedule RESTART IDENTITY;"))
-        df_new_schedule.to_sql('schedule', conn, if_exists='append', index=False)
+        df_new_schedule_psql.to_sql('schedule', conn, if_exists='append', index=False)
 
     print(f"Згенеровано розклад на {days_to_generate} днів у PostgreSQL!")
 
@@ -67,15 +90,65 @@ def initial_keyboard():
 
     return kb
 
-def appoint(slot_id, name, phone, user_id, service_id):
+def appoint(slot_id, name, phone, user_id, service_id, schedule_ws):
+    query = text("SELECT slot_date, slot_time FROM schedule WHERE id = :slot_id")
+    with engine.connect() as conn:
+        result1 = conn.execute(query, {"slot_id": slot_id}).mappings().first()
+    if result1:
+        slot_dict = dict(result1)
+
+    query = text("SELECT name FROM services WHERE id = :service_id")
+    with engine.connect() as conn:
+        result2 = conn.execute(query, {"service_id": service_id}).mappings().first()
+    if result2:
+        service_dict = dict(result2)
+
+    date_str = slot_dict['slot_date'].strftime("%d-%m-%Y")
+    time_str = slot_dict['slot_time'].strftime("%H:%M")
+    service_name = service_dict['name']
+
+    df = get_as_dataframe(schedule_ws)
+    row_index = df[(df['Дата'] == date_str) & (df['Час'] == time_str)].index[0] + 2
+
+    new_values = [[name, phone, service_name]]
+    schedule_ws.update(range_name=f'C{row_index}:E{row_index}', values=new_values)
+
     query = text("""
         UPDATE schedule 
         SET client_name = :name, client_phone = :phone, user_id = :user_id, status = 'Booked', service_id = :service_id 
         WHERE id = :slot_id AND status = 'Available'
     """)
     with engine.begin() as conn:
-        result = conn.execute(query, {"name": name, "phone": phone, "user_id": user_id, "slot_id": slot_id, "service_id" : service_id})
+        result = conn.execute(query, {"name": name,
+                                      "phone": phone,
+                                      "user_id": user_id,
+                                      "slot_id": slot_id,
+                                      "service_id" : service_id})
         return result.rowcount > 0
+
+
+def create_pagination_kb_date_schedule(page=0, limit=5):
+    kb = InlineKeyboardMarkup()
+    df = get_schedule()
+    unique_dates = df['Date'].unique()
+
+    start = page * limit
+    end = start + limit
+    current_dates = unique_dates[start:end]
+
+    for date_val in current_dates:
+        kb.add(InlineKeyboardButton(text=str(date_val), callback_data=f"date_sched_{date_val}"))
+
+    nav_btns = []
+    if page > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagedate_sched_{page - 1}"))
+    if end < len(unique_dates):
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagedate_sched_{page + 1}"))
+
+    if nav_btns:
+        kb.row(*nav_btns)
+    kb.add(InlineKeyboardButton("🏠 Головне меню", callback_data="main_menu"))
+    return kb
 
 def create_pagination_kb_services(page=0, limit=5):
     kb = InlineKeyboardMarkup()

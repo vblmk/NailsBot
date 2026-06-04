@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timedelta
 import pandas as pd
 import telebot
+import gspread
 from sqlalchemy import text
 from dotenv import load_dotenv
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -16,7 +17,8 @@ from tools import (engine,
                    appoint,
                    add_service,
                    create_pagination_kb_services,
-                   format_duration)
+                   format_duration,
+                   create_pagination_kb_date_schedule)
 
 load_dotenv()
 
@@ -26,6 +28,13 @@ DB_USER            = os.getenv('DB_USER')
 DB_PASSWORD        = os.getenv('DB_PASSWORD')
 DB_NAME            = os.getenv('DB_NAME')
 TOKEN              = os.getenv('TOKEN')
+GS_CREDS_PATH      = os.getenv('GS_CREDS_PATH')
+GS_NAME            = os.getenv('GS_NAME')
+SCHEDULE_WORKSHEET = os.getenv('SCHEDULE_WORKSHEET')
+
+gc          = gspread.service_account(filename=GS_CREDS_PATH)
+sh          = gc.open(GS_NAME)
+schedule_ws = sh.worksheet(SCHEDULE_WORKSHEET)
 
 bot = telebot.TeleBot(TOKEN)
 user_df = {}
@@ -88,13 +97,16 @@ def start(message):
 
 
 @bot.message_handler(commands=["schedule"])
-def schedule(message):
+def schedule(message, date=None):
+    if date is None:
+        date = datetime.now().date()
+
     user_df.pop(message.from_user.id, None)
 
     query = text("""
                  SELECT slot_time, client_name, client_phone, user_id, service_id
                  FROM schedule
-                 WHERE slot_date = CURRENT_DATE
+                 WHERE slot_date = :date
                    AND status = 'Booked'
                  ORDER BY slot_time
                  """)
@@ -104,18 +116,21 @@ def schedule(message):
     res_text = ""
 
     with engine.connect() as conn:
-        booked_slots = conn.execute(query).mappings().all()
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("Вибрати іншу дату", callback_data="pagedate_sched_0"))
+
+        booked_slots = conn.execute(query, {"date": date}).mappings().all()
         services = conn.execute(services_query).mappings().all()
 
         services_dict = {srv['id']: srv['name'] for srv in services}
 
         if not booked_slots:
-            bot.send_message(message.chat.id, "На сьогодні немає жодних записів. 🤷‍♀️")
+            date_str = date.strftime("%d-%m-%Y") if hasattr(date, 'strftime') else str(date)
+            bot.send_message(message.chat.id, f"На {date_str} немає жодних записів. 🤷‍♀️", reply_markup=kb)
             return
 
         for row in booked_slots:
             time_str = row['slot_time'].strftime("%H:%M")
-
             service_name = services_dict.get(row['service_id'], "Невідома послуга")
 
             try:
@@ -126,15 +141,42 @@ def schedule(message):
 
             res_text += f"⏰ {time_str}:\n   - 👤 {row['client_name']}\n   - 📞 {row['client_phone']}\n   - {tg_nick}\n   - 💅 {service_name}\n\n"
 
-    bot.send_message(message.chat.id, f"📅 Розклад на сьогодні:\n\n{res_text}")
+    date_str = date.strftime("%d-%m-%Y") if hasattr(date, 'strftime') else str(date)
+    bot.send_message(message.chat.id, f"📅 Розклад на {date_str}:\n\n{res_text}", reply_markup=kb)
 
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("date_sched_"))
+def handle_date_sched_selection(call):
+    bot.answer_callback_query(call.id)
+    date_str = call.data.split("date_sched_")[1]
+
+    try:
+        selected_date = datetime.strptime(date_str, "%d-%m-%Y").date()
+    except ValueError:
+        selected_date = datetime.now().date()
+
+    schedule(call.message, selected_date)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("pagedate_sched_"))
+def handle_date_pagination(call):
+    bot.answer_callback_query(call.id)
+    parts = call.data.split("_")
+    page = int(parts[2])
+
+    df = user_df.get(call.from_user.id)
+    if df is None:
+        df = get_schedule()
+        user_df[call.from_user.id] = df
+
+    kb = create_pagination_kb_date_schedule(page)
+    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=kb)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pagedate_"))
 def handle_date_pagination(call):
     bot.answer_callback_query(call.id)
     parts = call.data.split("_")
-    service_id = int(parts[1])  # Дістаємо послугу
-    page = int(parts[2])  # Дістаємо сторінку
+    service_id = int(parts[1])
+    page = int(parts[2])
 
     df = user_df.get(call.from_user.id)
     if df is None:
@@ -209,7 +251,7 @@ def callback_service_selection(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("back_to_dates_"))
 def handle_back_to_dates(call):
     bot.answer_callback_query(call.id)
-    service_id = int(call.data.split("_")[3]) # back_to_dates_1
+    service_id = int(call.data.split("_")[3])
     df = get_schedule()
     user_df[call.from_user.id] = df
 
@@ -246,7 +288,7 @@ def handle_booking(call):
             user = conn.execute(text("SELECT name, phone_number FROM users WHERE tg_id = :tg_id"), {"tg_id": call.from_user.id}).fetchone()
 
         if user:
-            success = appoint(slot_id, user.name, user.phone_number, call.from_user.id, service_id)
+            success = appoint(slot_id, user.name, user.phone_number, call.from_user.id, service_id, schedule_ws)
             if success:
                 date_str = slot.slot_date.strftime("%d-%m-%Y")
                 time_str = slot.slot_time.strftime("%H:%M")
