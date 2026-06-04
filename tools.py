@@ -51,7 +51,7 @@ def generate_schedule():
     print(f"Згенеровано розклад на {days_to_generate} днів у PostgreSQL!")
 
 def get_schedule():
-    query = "SELECT id, slot_date AS \"Date\", slot_time AS \"Time\", status AS \"Status\" FROM schedule WHERE status = 'Available' ORDER BY slot_date, slot_time"
+    query = "SELECT id, slot_date AS \"Date\", slot_time AS \"Time\", status AS \"Status\", client_name AS \"Name\", service_id AS \"Service_id\" FROM schedule WHERE status = 'Available' ORDER BY slot_date, slot_time"
     df = pd.read_sql(query, engine)
 
     if not df.empty:
@@ -67,17 +67,44 @@ def initial_keyboard():
 
     return kb
 
-def appoint(slot_id, name, phone, user_id):
+def appoint(slot_id, name, phone, user_id, service_id):
     query = text("""
         UPDATE schedule 
-        SET client_name = :name, client_phone = :phone, user_id = :user_id, status = 'Booked'
+        SET client_name = :name, client_phone = :phone, user_id = :user_id, status = 'Booked', service_id = :service_id 
         WHERE id = :slot_id AND status = 'Available'
     """)
     with engine.begin() as conn:
-        result = conn.execute(query, {"name": name, "phone": phone, "user_id": user_id, "slot_id": slot_id})
+        result = conn.execute(query, {"name": name, "phone": phone, "user_id": user_id, "slot_id": slot_id, "service_id" : service_id})
         return result.rowcount > 0
 
-def create_pagination_kb_date(df, page=0, limit=5):
+def create_pagination_kb_services(page=0, limit=5):
+    kb = InlineKeyboardMarkup()
+    query = text("SELECT id, name FROM services")
+
+    with engine.connect() as conn:
+        services_list = [dict(row) for row in conn.execute(query).mappings()]
+
+    start = page * limit
+    end = start + limit
+
+    current_page_services = services_list[start:end]
+
+    for e in current_page_services:
+        kb.add(InlineKeyboardButton(f"{e['name']}", callback_data=f"service_{e['id']}"))
+
+    nav_btns = []
+    if page > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pageserv_{page - 1}"))
+    if end < len(services_list):
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pageserv_{page + 1}"))
+
+    if nav_btns:
+        kb.row(*nav_btns)
+
+    kb.add(InlineKeyboardButton("🏠 Головне меню", callback_data="main_menu"))
+    return kb
+
+def create_pagination_kb_date(df, service_id, page=0, limit=5):
     kb = InlineKeyboardMarkup()
     unique_dates = df['Date'].unique()
 
@@ -87,20 +114,20 @@ def create_pagination_kb_date(df, page=0, limit=5):
 
     for date_val in current_dates:
         first_id = df[df['Date'] == date_val].iloc[0]['id']
-        kb.add(InlineKeyboardButton(text=str(date_val), callback_data=f"date_{first_id}_{date_val}"))
+        kb.add(InlineKeyboardButton(text=str(date_val), callback_data=f"date_{first_id}_{date_val}_{service_id}"))
 
     nav_btns = []
     if page > 0:
-        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagedate_{page - 1}"))
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagedate_{service_id}_{page - 1}"))
     if end < len(unique_dates):
-        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagedate_{page + 1}"))
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagedate_{service_id}_{page + 1}"))
 
     if nav_btns:
         kb.row(*nav_btns)
     kb.add(InlineKeyboardButton("🏠 Головне меню", callback_data="main_menu"))
     return kb
 
-def create_pagination_kb_time(df, date, page=0, limit=5):
+def create_pagination_kb_time(df, date, service_id, page=0, limit=5):
     kb = InlineKeyboardMarkup()
     df_filtered = df[df['Date'] == date]
 
@@ -111,23 +138,44 @@ def create_pagination_kb_time(df, date, page=0, limit=5):
     for index, row in current_rows.iterrows():
         btn_text = f"{row['Time']}"
         # Передаємо реальний ID з бази даних для бронювання
-        kb.add(InlineKeyboardButton(btn_text, callback_data=f"book_{row['id']}"))
+        kb.add(InlineKeyboardButton(btn_text, callback_data=f"book_{row['id']}_{service_id}"))
 
     nav_btns = []
     if page > 0:
-        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagetime_{date}_{page - 1}"))
+        nav_btns.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"pagetime_{date}_{service_id}_{page - 1}"))
     if end < len(df_filtered):
-        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagetime_{date}_{page + 1}"))
+        nav_btns.append(InlineKeyboardButton("Вперед ➡️", callback_data=f"pagetime_{date}_{service_id}_{page + 1}"))
 
     if nav_btns:
         kb.row(*nav_btns)
-    kb.add(InlineKeyboardButton("🔙 До списку дат", callback_data="back_to_dates"))
+    kb.add(InlineKeyboardButton("🔙 До списку дат", callback_data=f"back_to_dates_{service_id}"))
     return kb
 
 def add_master(name):
-    query = text("INSERT INTO masters (name) VALUES (:name)")
+    query_insert = text("INSERT INTO masters (name) VALUES (:name)")
     with engine.begin() as conn:
-        conn.execute(query, {"name": name})
+        conn.execute(query_insert, {"name": name})
+
+
+def format_duration(hours_float: float) -> str:
+    hours_float = float(hours_float)
+    hours = int(hours_float)
+    minutes = round((hours_float - hours) * 60)
+
+    if minutes == 60:
+        hours += 1
+        minutes = 0
+
+    result = []
+    if hours > 0:
+        result.append(f"{hours} год")
+    if minutes > 0:
+        result.append(f"{minutes} хв")
+
+    if not result:
+        return "0 хв"
+
+    return " ".join(result)
 
 if __name__ == "__main__":
     generate_schedule()
