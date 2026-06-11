@@ -146,9 +146,8 @@ def schedule(message, date=None):
 
 @bot.message_handler(commands=["appoint"])
 def manual_appoint(message):
-    msg = bot.send_message(message.chat.id, "Надішліть дані для запису клієнта у такому форматі:\nДД-ММ-РРРР,ГГ:ХВ,ім'я,телефон,назва_послуги")
+    msg = bot.send_message(message.chat.id, "Надішліть дані для запису клієнта у такому форматі:\nДД-ММ-РРРР,ГГ:ХВ,ім'я,телефон,послуга")
     bot.register_next_step_handler(msg, handle_manual_appointment)
-
 
 def handle_manual_appointment(msg):
     try:
@@ -165,7 +164,7 @@ def handle_manual_appointment(msg):
 
         with engine.connect() as conn:
             service = conn.execute(
-                text("SELECT id FROM services WHERE name = :name"),
+                text("SELECT id, name FROM services WHERE name = :name"),
                 {'name': service_name}
             ).fetchone()
 
@@ -176,28 +175,29 @@ def handle_manual_appointment(msg):
 
         if not service:
             bot.send_message(msg.chat.id,
-                             f"❌ Не знайдено послуги з назвою '{service_name}'. Спробуйте знову через /appoint")
+                             f"❌ Не знайдено послуги з назвою '{service_name}'. Спробуйте знову: /appoint")
             return
 
         if not slot or slot.status == 'Booked':
-            bot.send_message(msg.chat.id, f"❌ Не знайдено вільного слоту на {date_str} о {time_str}. Спробуйте знову.")
+            bot.send_message(msg.chat.id, f"❌ Не знайдено вільного слоту на {date_str} о {time_str}. Спробуйте знову: /appoint")
             return
 
         slot_id = slot.id
         serv_id = service.id
+        serv_name = service.name
 
         success = appoint(slot_id, name, phone, serv_id)
 
         if success:
-            bot.send_message(msg.chat.id, f"✅ Запис створено! {name} успішно записано на {date_str} ({time_str})!")
+            bot.send_message(msg.chat.id, f"<b>✅ Запис створено!</b>\n\n👤 {name}\n📅 Дата: {date_str}\n⏰Час: {time_str}\n💅 {serv_name}", parse_mode='HTML')
         else:
-            bot.send_message(msg.chat.id, "❌ Помилка при виконанні функції appoint.")
+            bot.send_message(msg.chat.id, "❌ Помилка при створенні запису. Спробуйте знову: /appoint")
 
     except ValueError as ve:
-        bot.send_message(msg.chat.id, f"⚠️ Помилка у форматі даних: {ve}\nСпробуйте команду /appoint знову.")
+        bot.send_message(msg.chat.id, f"⚠️ Помилка у форматі даних.\nСпробуйте знову: /appoint")
     except Exception as e:
         print(f"Глобальна помилка ручного запису: {e}")
-        bot.send_message(msg.chat.id, "💥 Сталася технічна помилка під час обробки даних.")
+        bot.send_message(msg.chat.id, "💥 Сталася технічна помилка під час обробки даних. Спробуйте знову: /appoint")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("date_sched_"))
 def handle_date_sched_selection(call):
@@ -336,7 +336,7 @@ def appoint_approved(call):
     time_str = slot.slot_time.strftime("%H:%M")
     serv_name = service.name if service else "Невідома послуга"
 
-    success = appoint(slot_id, name, phone_number, call.from_user.id, serv_id)
+    success = appoint(slot_id, name, phone_number, serv_id, call.from_user.id)
 
     if success:
         bot.edit_message_text(
