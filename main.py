@@ -144,6 +144,60 @@ def schedule(message, date=None):
     date_str = date.strftime("%d-%m-%Y") if hasattr(date, 'strftime') else str(date)
     bot.send_message(message.chat.id, f"📅 Розклад на {date_str}:\n\n{res_text}", reply_markup=kb)
 
+@bot.message_handler(commands=["appoint"])
+def manual_appoint(message):
+    msg = bot.send_message(message.chat.id, "Надішліть дані для запису клієнта у такому форматі:\nДД-ММ-РРРР,ГГ:ХВ,ім'я,телефон,назва_послуги")
+    bot.register_next_step_handler(msg, handle_manual_appointment)
+
+
+def handle_manual_appointment(msg):
+    try:
+        parts = [p.strip() for p in msg.text.split(",")]
+        if len(parts) != 5:
+            raise ValueError("Невірний формат даних (має бути 4 коми).")
+
+        date_str, time_str, name, phone, service_name = parts
+
+        date_obj = datetime.strptime(date_str, "%d-%m-%Y")
+        date_reformatted = date_obj.strftime("%Y-%m-%d")
+
+        time_obj = datetime.strptime(time_str, "%H:%M").time()
+
+        with engine.connect() as conn:
+            service = conn.execute(
+                text("SELECT id FROM services WHERE name = :name"),
+                {'name': service_name}
+            ).fetchone()
+
+            slot = conn.execute(
+                text("SELECT id, status FROM schedule WHERE slot_date = :slot_date AND slot_time = :slot_time"),
+                {'slot_date': date_reformatted, 'slot_time': time_obj}
+            ).fetchone()
+
+        if not service:
+            bot.send_message(msg.chat.id,
+                             f"❌ Не знайдено послуги з назвою '{service_name}'. Спробуйте знову через /appoint")
+            return
+
+        if not slot or slot.status == 'Booked':
+            bot.send_message(msg.chat.id, f"❌ Не знайдено вільного слоту на {date_str} о {time_str}. Спробуйте знову.")
+            return
+
+        slot_id = slot.id
+        serv_id = service.id
+
+        success = appoint(slot_id, name, phone, serv_id)
+
+        if success:
+            bot.send_message(msg.chat.id, f"✅ Запис створено! {name} успішно записано на {date_str} ({time_str})!")
+        else:
+            bot.send_message(msg.chat.id, "❌ Помилка при виконанні функції appoint.")
+
+    except ValueError as ve:
+        bot.send_message(msg.chat.id, f"⚠️ Помилка у форматі даних: {ve}\nСпробуйте команду /appoint знову.")
+    except Exception as e:
+        print(f"Глобальна помилка ручного запису: {e}")
+        bot.send_message(msg.chat.id, "💥 Сталася технічна помилка під час обробки даних.")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("date_sched_"))
 def handle_date_sched_selection(call):
@@ -262,18 +316,57 @@ def handle_back_to_dates(call):
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text="Виберіть дату:", reply_markup=kb)
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
+def appoint_approved(call):
+    # "approve_{slot_id}_{service_id}
+    _, slot_id, serv_id = call.data.split("_")
+    user_id= call.from_user.id
+
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT name, phone_number FROM users WHERE tg_id = :tg_id"),
+                            {"tg_id": user_id}).fetchone()
+        slot = conn.execute(text("SELECT slot_date, slot_time, status FROM schedule WHERE id = :id"),
+                            {"id": slot_id}).fetchone()
+        service = conn.execute(text("SELECT name FROM services WHERE id = :id"),
+                     {"id": serv_id}).fetchone()
+
+    name = user.name
+    phone_number = user.phone_number
+    date_str = slot.slot_date.strftime("%d-%m-%Y")
+    time_str = slot.slot_time.strftime("%H:%M")
+    serv_name = service.name if service else "Невідома послуга"
+
+    success = appoint(slot_id, name, phone_number, call.from_user.id, serv_id)
+
+    if success:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"✅ Ви успішно записані!\n📅 Дата: {date_str}\n⏰Час: {time_str}\n💅 {serv_name}\nЧекаємо на вас!",
+            reply_markup=initial_keyboard()
+        )
+    else:
+        bot.answer_callback_query(call.id, "Не вдалося забронювати. Можливо, його щойно зайняли.", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("book_"))
 def handle_booking(call):
     bot.answer_callback_query(call.id)
 
     user_df.pop(call.from_user.id, None)
-    slot_id = int(call.data.split("_")[1])
-    service_id = int(call.data.split("_")[2])
+
+    _, slot_id, service_id = call.data.split("_")
+    slot_id = int(slot_id)
+    service_id = int(service_id)
 
     try:
         with engine.connect() as conn:
-            slot = conn.execute(text("SELECT slot_date, slot_time, status FROM schedule WHERE id = :id"), {"id": slot_id}).fetchone()
+            service = conn.execute(text("SELECT name FROM services WHERE id = :id"), {"id": service_id}).fetchone()
+
+            slot = conn.execute(text("SELECT slot_date, slot_time, status FROM schedule WHERE id = :id"),
+                                {"id": slot_id}).fetchone()
+
+            user = conn.execute(text("SELECT name, phone_number FROM users WHERE tg_id = :tg_id"),
+                                {"tg_id": call.from_user.id}).fetchone()
 
         if not slot:
             bot.answer_callback_query(call.id, "Цей запис більше не існує.", show_alert=True)
@@ -283,23 +376,18 @@ def handle_booking(call):
             bot.answer_callback_query(call.id, "На жаль, цей час уже зайнятий!", show_alert=True)
             return
 
-        # Отримуємо дані користувача з БД
-        with engine.connect() as conn:
-            user = conn.execute(text("SELECT name, phone_number FROM users WHERE tg_id = :tg_id"), {"tg_id": call.from_user.id}).fetchone()
+        date_str = slot.slot_date.strftime("%d-%m-%Y")
+        time_str = slot.slot_time.strftime("%H:%M")
+        serv_name = service.name if service else "Невідома послуга"
 
         if user:
-            success = appoint(slot_id, user.name, user.phone_number, call.from_user.id, service_id, schedule_ws)
-            if success:
-                date_str = slot.slot_date.strftime("%d-%m-%Y")
-                time_str = slot.slot_time.strftime("%H:%M")
-                bot.edit_message_text(
-                    chat_id=call.message.chat.id,
-                    message_id=call.message.message_id,
-                    text=f"✅ Ви успішно записані!\n📅 Дата: {date_str}\n⏰ Час: {time_str}\n\nЧекаємо на вас!",
-                    reply_markup=initial_keyboard()
-                )
-            else:
-                bot.answer_callback_query(call.id, "Не вдалося забронювати. Можливо, його щойно зайняли.", show_alert=True)
+            kb = InlineKeyboardMarkup(row_width=1)
+            kb.add(InlineKeyboardButton("✅ Підтвердити запис", callback_data=f"approve_{slot_id}_{service_id}"),
+                   InlineKeyboardButton("❌ Скасувати", callback_data="cancel"))
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                  message_id=call.message.message_id,
+                                  text = f"✍️ Перевірте інформацію:\n    📅 Дата: {date_str}\n    ⏰ Час: {time_str}\n    💅 {serv_name}",
+                                  reply_markup=kb)
         else:
             bot.answer_callback_query(call.id, "Користувача не знайдено. Натисніть /start", show_alert=True)
 
@@ -361,7 +449,22 @@ def callback(call):
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                   text="Виберіть дату:", reply_markup=kb)
 
+    elif call.data == "cancel":
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"Запис скасовано",
+            reply_markup=initial_keyboard()
+        )
+
 def get_phone(message):
+    phone = message.text.strip()
+    with engine.begin() as conn:
+        user = conn.execute("SELECT phone, name, tg_id FROM users WHERE phone_number = :phone_number", {"phone_number": phone}).fetchone()
+
+    if user.phone & user.tg_id is None:
+        bot.send_message(message.chat.id, f"Ви є в списку клієнтів. Вас авторизовано під ім'ям {user.name}.", reply_markup=initial_keyboard())
+
     user_data = {'phone' : message.text.strip()}
     msg = bot.send_message(message.chat.id, "Як до вас можна звертатись?")
     bot.register_next_step_handler(msg, get_name, user_data)

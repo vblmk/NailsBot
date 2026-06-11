@@ -90,7 +90,7 @@ def initial_keyboard():
 
     return kb
 
-def appoint(slot_id, name, phone, user_id, service_id, schedule_ws):
+def appoint(slot_id, name, phone, service_id, user_id = None,  schedule_ws = schedule_ws):
     query = text("SELECT slot_date, slot_time FROM schedule WHERE id = :slot_id")
     with engine.connect() as conn:
         result1 = conn.execute(query, {"slot_id": slot_id}).mappings().first()
@@ -249,6 +249,7 @@ def format_duration(hours_float: float) -> str:
         return "0 хв"
 
     return " ".join(result)
+
 
 if __name__ == "__main__":
     generate_schedule()
