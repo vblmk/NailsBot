@@ -95,6 +95,16 @@ def start(message):
                                           "Надішліть, будь ласка, свій номер телефону")
         bot.register_next_step_handler(msg, get_phone)
 
+@bot.message_handler(commands=["statistics"])
+def statistics(message):
+    res_text = ""
+
+    with engine.begin() as conn:
+        stats = conn.execute(text("select name, coalesce(stat, 0) as stat from services order by stat")).mappings().all()
+
+    for row in stats:
+        res_text += f"\n📌{row['name']} - {row['stat']}"
+    bot.send_message(message.chat.id, "📊 Статистика за весь час:" + res_text)
 
 @bot.message_handler(commands=["schedule"])
 def schedule(message, date=None):

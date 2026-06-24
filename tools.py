@@ -91,6 +91,38 @@ def initial_keyboard():
     return kb
 
 def appoint(slot_id, name, phone, service_id, user_id=None, schedule_ws=schedule_ws):
+    # ==========================================
+    # 1. РОБОТА З БАЗОЮ ДАНИХ (Єдина транзакція)
+    # ==========================================
+    with engine.begin() as conn:
+        result = conn.execute(text("""
+            UPDATE schedule
+            SET client_name  = :name,
+                client_phone = :phone,
+                user_id      = :user_id,
+                status       = 'Booked',
+                service_id   = :service_id
+            WHERE id = :slot_id
+              AND status = 'Available'
+        """), {
+            "name": name,
+            "phone": phone,
+            "user_id": user_id,
+            "slot_id": slot_id,
+            "service_id": service_id
+        })
+
+        if result.rowcount == 0:
+            return False
+
+        conn.execute(
+            text("UPDATE services SET stat = COALESCE(stat, 0) + 1 WHERE id = :service_id"),
+            {"service_id": service_id}
+        )
+
+    # ==========================================
+    # 2. ОТРИМАННЯ ДАНИХ ДЛЯ GOOGLE ТАБЛИЦІ
+    # ==========================================
     query_slot = text("SELECT slot_date, slot_time FROM schedule WHERE id = :slot_id")
     query_service = text("SELECT name FROM services WHERE id = :service_id")
 
@@ -99,49 +131,28 @@ def appoint(slot_id, name, phone, service_id, user_id=None, schedule_ws=schedule
         result2 = conn.execute(query_service, {"service_id": service_id}).mappings().first()
 
     if not result1 or not result2:
-        print(f"⚠️ Помилка: Слот {slot_id} або Послуга {service_id} не знайдені в базі даних!")
-        return False
+        return True
 
-    slot_dict = dict(result1)
-    service_dict = dict(result2)
+    date_str = result1['slot_date'].strftime("%d-%m-%Y")
+    time_str = result1['slot_time'].strftime("%H:%M")
+    service_name = result2['name']
 
-    date_str = slot_dict['slot_date'].strftime("%d-%m-%Y")
-    time_str = slot_dict['slot_time'].strftime("%H:%M")
-    service_name = service_dict['name']
-
+    # ==========================================
+    # 3. ОНОВЛЕННЯ GOOGLE ТАБЛИЦІ
+    # ==========================================
     try:
         df = get_as_dataframe(schedule_ws)
         matching_rows = df[(df['Дата'] == date_str) & (df['Час'] == time_str)].index
-        if len(matching_rows) == 0:
-            print("⚠️ Не знайдено відповідного рядка в Google Таблиці")
-            return False
-
-        row_index = matching_rows[0] + 2
-        new_values = [[name, phone, service_name]]
-        schedule_ws.update(range_name=f'C{row_index}:E{row_index}', values=new_values)
+        if len(matching_rows) > 0:
+            row_index = matching_rows[0] + 2
+            new_values = [[name, phone, service_name]]
+            schedule_ws.update(range_name=f'C{row_index}:E{row_index}', values=new_values)
+        else:
+            print("⚠️ Не знайдено відповідного рядка в Google Таблиці для оновлення")
     except Exception as gs_err:
         print(f"💥 Помилка оновлення Google Sheets: {gs_err}")
 
-    query_update = text("""
-                        UPDATE schedule
-                        SET client_name  = :name,
-                            client_phone = :phone,
-                            user_id      = :user_id,
-                            status       = 'Booked',
-                            service_id   = :service_id
-                        WHERE id = :slot_id
-                          AND status = 'Available'
-                        """)
-
-    with engine.begin() as conn:
-        result = conn.execute(query_update, {
-            "name": name,
-            "phone": phone,
-            "user_id": user_id,
-            "slot_id": slot_id,
-            "service_id": service_id
-        })
-        return result.rowcount > 0
+    return True
 
 def create_pagination_kb_date_schedule(page=0, limit=5):
     kb = InlineKeyboardMarkup()
