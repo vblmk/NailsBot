@@ -83,10 +83,11 @@ def get_schedule():
     return df
 
 def initial_keyboard():
-    kb = InlineKeyboardMarkup(row_width=2)
+    kb = InlineKeyboardMarkup(row_width=1)
 
     kb.add(InlineKeyboardButton("Прайс-лист", callback_data="btnPrice"),
-           InlineKeyboardButton("Запис", callback_data="btnAppoint"))
+           InlineKeyboardButton("Запис", callback_data="btnAppoint"),
+           InlineKeyboardButton("Мої записи", callback_data="btnMyVisits"))
 
     return kb
 

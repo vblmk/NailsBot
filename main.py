@@ -95,6 +95,41 @@ def start(message):
                                           "Надішліть, будь ласка, свій номер телефону")
         bot.register_next_step_handler(msg, get_phone)
 
+@bot.message_handler(commands=["myvisits"])
+def my_visits(message):
+    print("command /myvisits")
+    tg_id = message.from_user.id
+    res_text = ''
+
+    with engine.begin() as conn:
+        user = conn.execute( text("SELECT * FROM users WHERE tg_id = :tg_id"),
+                          {"tg_id" : tg_id}).fetchone()
+        if not user:
+            bot.send_message(message.chat.id, "Користувача не знайдено. Натисніть /start")
+            print("user found")
+            return
+        visits = conn.execute(text("SELECT * FROM schedule WHERE user_id = :tg_id"), {"tg_id" : message.from_user.id}).mappings().all()
+        if visits:
+            print("found visits")
+
+    for row in visits:
+        with engine.begin() as conn:
+            service = conn.execute(text("SELECT name FROM services WHERE id = :serv_id"),
+                                   {'serv_id' : row['service_id']}).fetchone()
+        name = row['client_name']
+        date_str = row['slot_date'].strftime("%d-%m-%Y")
+        time_str = row['slot_time'].strftime("%H:%M")
+        serv_name = service.name if service else "Невідома послуга"
+        res_text += f"\n\n📌 {serv_name}\n  📅 Дата: {date_str}\n  ⏰Час: {time_str}"
+        print(f"\n\n👤 {name}\n📅 Дата: {date_str}\n⏰Час: {time_str}\n💅 {serv_name}")
+
+    if res_text != '':
+        bot.send_message(message.chat.id, "Ваші записи:" + res_text)
+        print("lets go")
+    else:
+        bot.send_message(message.chat.id, "Не знайдено записів за цим користувачем")
+        print("not lets go")
+
 @bot.message_handler(commands=["statistics"])
 def statistics(message):
     res_text = ""
@@ -466,6 +501,41 @@ def callback(call):
             text=f"Запис скасовано",
             reply_markup=initial_keyboard()
         )
+
+    elif call.data == "btnMyVisits":
+        print("command /myvisits")
+        tg_id = call.from_user.id
+        res_text = ''
+
+        with engine.begin() as conn:
+            user = conn.execute(text("SELECT * FROM users WHERE tg_id = :tg_id"),
+                                {"tg_id": tg_id}).fetchone()
+            if not user:
+                bot.send_message(call.message.chat.id, "Користувача не знайдено. Натисніть /start")
+                print("user found")
+                return
+            visits = conn.execute(text("SELECT * FROM schedule WHERE user_id = :tg_id"),
+                                  {"tg_id": call.from_user.id}).mappings().all()
+            if visits:
+                print("found visits")
+
+        for row in visits:
+            with engine.begin() as conn:
+                service = conn.execute(text("SELECT name FROM services WHERE id = :serv_id"),
+                                       {'serv_id': row['service_id']}).fetchone()
+            name = row['client_name']
+            date_str = row['slot_date'].strftime("%d-%m-%Y")
+            time_str = row['slot_time'].strftime("%H:%M")
+            serv_name = service.name if service else "Невідома послуга"
+            res_text += f"\n\n📌 {serv_name}\n  📅 Дата: {date_str}\n  ⏰Час: {time_str}"
+            print(f"\n\n👤 {name}\n📅 Дата: {date_str}\n⏰Час: {time_str}\n💅 {serv_name}")
+
+        if res_text != '':
+            bot.send_message(call.message.chat.id, "Ваші записи:" + res_text)
+            print("lets go")
+        else:
+            bot.send_message(call.message.chat.id, "Не знайдено записів за цим користувачем")
+            print("not lets go")
 
 def get_phone(message):
     phone = message.text.strip()
