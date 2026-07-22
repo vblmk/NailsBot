@@ -16,7 +16,7 @@ def main():
     
     print("all handlers registered, listening to telegram...")
     
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    bot.infinity_polling()
 
 if __name__ == "__main__":
     main()
