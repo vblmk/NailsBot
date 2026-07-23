@@ -72,11 +72,22 @@ def register_admin_handlers(bot: TeleBot):
         date_str = call.data.split("date_sched_")[1]
 
         try:
-            selected_date =  datetime.strptime(date_str, "%d-%m-%Y").date()
+            selected_date = datetime.strptime(date_str, "%d-%m-%Y").date()
         except ValueError:
-            selected_date =  datetime.now().date()
+            selected_date = datetime.now().date()
 
-        schedule(call.message, selected_date)
+        res_text = get_schedule_info(selected_date, bot)
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("Вибрати іншу дату", callback_data="pagedate_sched_0"))
+        
+        date_str_formatted = selected_date.strftime("%d-%m-%Y")
+        
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"📅 Розклад на {date_str_formatted}:\n\n{res_text}",
+            reply_markup=kb
+        )
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pagedate_sched_"))
     @is_admin
