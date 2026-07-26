@@ -1,6 +1,6 @@
 from database import engine
 from sqlalchemy import text
-from utils.formatters import format_duration
+from utils.formatters import format_duration_from_db
 from utils.decorators import safe_db_query
 
 @safe_db_query
@@ -9,7 +9,7 @@ def get_price():
     with engine.connect() as conn:
         services = conn.execute(text("SELECT name, price, duration FROM services")).mappings().all()
     for row in services:
-        res_text += f" 📌 {row['name']}, {row['price']}₴, {format_duration(row['duration'])}\n"
+        res_text += f" 📌 {row['name']}, {row['price']}₴, {format_duration_from_db(row['duration'])}\n"
     
     return res_text
 
@@ -138,3 +138,20 @@ def get_service_and_slot_info(service_name, date_reformatted, time_obj):
             return "No slot"
         
     return (service.id, service.name, slot.id)
+
+@safe_db_query
+def add_service_db(name, price, duration):
+    with engine.connect() as conn:
+        conn.execute(text("select * from schedule"))
+        try:
+            conn.execute(text("SELECT * FROM schedule WHERE slot_time + INTERVAL :duration < '18:00'"), {'duration' : duration})
+        except Exception as e:
+            print(f"wif {e}")
+            return "wrong interval format"
+
+        result = conn.execute(text("INSERT INTO services (name, price, duration) VALUES (:name, :price, :duration)"), 
+                     {'name' : name, 'price' : price, 'duration': duration})
+        conn.commit()
+        
+        print(result.rowcount)
+    return result.rowcount

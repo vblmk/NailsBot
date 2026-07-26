@@ -1,6 +1,7 @@
+from bot_config import ADMIN_IDS
 from telebot import TeleBot
 from bot_config import user_df
-from keyboards.inline import initial_keyboard
+from keyboards.inline import initial_keyboard, admin_keyboard
 from services.user_services import user_exists_by_id, register_user
 from services.db_services import get_user_by_phone, update_user_tgid
 
@@ -12,7 +13,10 @@ def register_start_handler(bot: TeleBot):
 
         tg_id = message.from_user.id
         
-        if user_exists_by_id(tg_id):
+        if tg_id in ADMIN_IDS:
+            bot.send_message(message.chat.id, "Адмін-панель", reply_markup=admin_keyboard())
+
+        elif user_exists_by_id(tg_id):
             bot.send_message(message.chat.id, "Манікюрна баби галі", reply_markup=initial_keyboard())
         else:
             msg = bot.send_message(
