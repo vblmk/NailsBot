@@ -8,7 +8,7 @@ from services.schedule_services import appoint
 from keyboards.pagination import create_pagination_kb_date_schedule
 from keyboards.inline import admin_keyboard
 from services.db_services import get_schedule_info, get_service_and_slot_info, add_service_db
-from utils.formatters import is_float, format_duration_to_db
+from utils.formatters import is_float, format_duration_to_db, format_duration_from_db
 
 serv_data = {}
 
@@ -75,9 +75,13 @@ def register_admin_handlers(bot: TeleBot):
         bot.answer_callback_query(call.id)
         serv_data[call.from_user.id] = {}
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("Головне меню", callback_data=))
+        kb.add(InlineKeyboardButton("Головне меню", callback_data="btn_mainMenu"))
         
-        msg = bot.send_message(call.message.chat.id, "ДОДАВАННЯ НОВОЇ ПОСЛУГИ\n\nНадішліть назву послуги:", reply_markup=kb)
+        msg = bot.edit_message_text(chat_id=call.message.chat.id,
+                                    message_id=call.message.message_id,
+                                    text="ДОДАВАННЯ НОВОЇ ПОСЛУГИ\n\nНадішліть назву послуги:",
+                                    reply_markup=kb)
+        
         serv_data[call.from_user.id]['msg'] = msg
         
         bot.register_next_step_handler(msg, handle_add_service_price, kb)
@@ -120,24 +124,23 @@ def register_admin_handlers(bot: TeleBot):
                            message_id=message.message_id)
         
         name, price, duration = serv_data[message.from_user.id]['name'], serv_data[message.from_user.id]['price'], format_duration_to_db(message.text)
-        print(duration)
         res = add_service_db(name, price, duration)
         
         if res == "wrong interval format":
-            msg = bot.edit_message_text(chat_id = message.chat.id,
-                                        message_id=serv_data[message.from_user.id]['msg'].id, 
-                                        text="Помилка додавання нової послуги: неправильний формат тривалості\nПравильний формат: 1год 30хв",
-                                        reply_markup=admin_keyboard())
+            bot.edit_message_text(chat_id = message.chat.id,
+                                    message_id=serv_data[message.from_user.id]['msg'].id, 
+                                    text="Помилка додавання нової послуги: неправильний формат тривалості\nПравильний формат: 1год 30хв",
+                                    reply_markup=admin_keyboard())
         elif res is None:
-            msg = bot.edit_message_text(chat_id = message.chat.id,
-                            message_id=serv_data[message.from_user.id]['msg'].id, 
-                            text="Технічна помилка при спробі додати нову послугу. Зверніться до адміністратора або спробуйте пізніше.",
-                            reply_markup=admin_keyboard())
+            bot.edit_message_text(chat_id = message.chat.id,
+                                    message_id=serv_data[message.from_user.id]['msg'].id, 
+                                    text="Технічна помилка при спробі додати нову послугу. Зверніться до адміністратора або спробуйте пізніше.",
+                                    reply_markup=admin_keyboard())
         elif res > 0:
-            msg = bot.edit_message_text(chat_id = message.chat.id,
-                            message_id=serv_data[message.from_user.id]['msg'].id, 
-                            text=f"Послугу додано успішно!\n\nНазва: {name}\nЦіна: {price}\nТривалість: {duration}",
-                            reply_markup=admin_keyboard())
+            bot.edit_message_text(chat_id = message.chat.id,
+                                    message_id=serv_data[message.from_user.id]['msg'].id, 
+                                    text=f"Послугу додано успішно!\n\nНазва: {name}\nЦіна: {price}\nТривалість: {format_duration_from_db(duration)}",
+                                    reply_markup=admin_keyboard())
         
     @bot.callback_query_handler(func=lambda call: call.data.startswith("date_sched_"))
     @is_admin

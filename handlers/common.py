@@ -9,6 +9,7 @@ def register_common_handlers(bot: TeleBot):
     
     @bot.callback_query_handler(func=lambda call: call.data == "btn_mainMenu")
     def cb_main_menu(call):
+        bot.clear_step_handler_by_chat_id(call.message.chat.id)
         bot.answer_callback_query(call.id)
         bot.clear_step_handler_by_chat_id(call.message.chat.id)
         user_df.pop(call.from_user.id, None)

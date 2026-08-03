@@ -153,5 +153,4 @@ def add_service_db(name, price, duration):
                      {'name' : name, 'price' : price, 'duration': duration})
         conn.commit()
         
-        print(result.rowcount)
     return result.rowcount
