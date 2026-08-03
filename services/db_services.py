@@ -154,3 +154,17 @@ def add_service_db(name, price, duration):
         conn.commit()
         
     return result.rowcount
+
+@safe_db_query
+def delete_service(id):
+    with engine.connect() as conn:
+        result = conn.execute(text("DELETE FROM services WHERE id = :id"), {"id" : id})
+        conn.commit()
+    return result.rowcount
+
+@safe_db_query
+def get_serv_info(id: int):
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT name FROM services WHERE id = :id"), {'id' : id}).fetchone()
+    return res.name     
+    

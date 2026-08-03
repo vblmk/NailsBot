@@ -11,8 +11,11 @@ def initial_keyboard():
 
 def admin_keyboard():
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("Додати послугу", callback_data="btn_addService"),
+    kb.add(
            InlineKeyboardButton("Розклад", callback_data="btn_schedule"),
-           InlineKeyboardButton("Запис вручну", callback_data="btn_manualAppoint"))
+           InlineKeyboardButton("Запис вручну", callback_data="btn_manualAppoint"),
+           InlineKeyboardButton("Додати послугу", callback_data="btn_addService"),
+           InlineKeyboardButton("Видалити послугу", callback_data="btn_deleteService")
+           )
     
     return kb

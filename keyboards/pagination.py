@@ -100,3 +100,13 @@ def create_pagination_kb_time(df, date, service_id, page=0, limit=5):
         kb.row(*nav_btns)
     kb.add(InlineKeyboardButton("🔙 До списку дат", callback_data=f"back_to_dates_{service_id}"))
     return kb
+
+def create_pagination_kb_services_del(page=0, limit=5):
+    with engine.connect() as conn:
+        kb = InlineKeyboardMarkup(row_width=1)        
+        services = conn.execute(text("SELECT id, name FROM services")).mappings().all()
+        
+        for row in services:
+            kb.add(InlineKeyboardButton(row['name'], callback_data=f"serv_del_{row['id']}"))
+                    
+    return kb

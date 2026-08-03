@@ -5,9 +5,9 @@ from utils.decorators import is_admin
 from datetime import datetime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from services.schedule_services import appoint
-from keyboards.pagination import create_pagination_kb_date_schedule
+from keyboards.pagination import create_pagination_kb_date_schedule, create_pagination_kb_services_del
 from keyboards.inline import admin_keyboard
-from services.db_services import get_schedule_info, get_service_and_slot_info, add_service_db
+from services.db_services import get_schedule_info, get_service_and_slot_info, add_service_db, delete_service, get_serv_info
 from utils.formatters import is_float, format_duration_to_db, format_duration_from_db
 
 serv_data = {}
@@ -142,6 +142,21 @@ def register_admin_handlers(bot: TeleBot):
                                     text=f"Послугу додано успішно!\n\nНазва: {name}\nЦіна: {price}\nТривалість: {format_duration_from_db(duration)}",
                                     reply_markup=admin_keyboard())
         
+        
+    @bot.callback_query_handler(func= lambda call: call.data == "btn_deleteService")
+    @is_admin
+    def handle_delete_service_name(call: CallbackQuery):
+        kb = InlineKeyboardMarkup()
+        kb.add(
+            InlineKeyboardButton("Головне меню", callback_data="btn_mainMenu")
+        )
+
+        msg = bot.edit_message_text(chat_id=call.message.chat.id,
+                                    message_id=call.message.message_id,
+                                    text='Виберіть послугу:',
+                                    reply_markup=create_pagination_kb_services_del()
+                                   )        
+              
     @bot.callback_query_handler(func=lambda call: call.data.startswith("date_sched_"))
     @is_admin
     def handle_date_sched_selection(call):
@@ -177,3 +192,26 @@ def register_admin_handlers(bot: TeleBot):
 
         kb = create_pagination_kb_date_schedule(page)
         bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=kb)
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("serv_del_"))
+    def handle_service_deletion(call: CallbackQuery):
+        serv_id = call.data.split("_")[2]
+        serv_name = get_serv_info(serv_id)
+        
+        res = delete_service(serv_id)
+        
+        if res > 0:
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                    message_id=call.message.message_id,
+                                    text=f"Послугу \"{serv_name}\" видалено успішно",
+                                    reply_markup=admin_keyboard())
+        elif res == 0:
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                    message_id=call.message.message_id,
+                                    text=f"Не знайдено послугу {serv_name}",
+                                    reply_markup=admin_keyboard())
+        elif res is None:
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                    message_id=call.message.message_id,
+                                    text=f"Виникла технічна помилка при спробі видалити послугу {serv_name}\n\nЗверніться до адміністратора або спробуйте пізніше",
+                                    reply_markup=admin_keyboard())
