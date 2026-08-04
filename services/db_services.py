@@ -163,8 +163,31 @@ def delete_service(id):
     return result.rowcount
 
 @safe_db_query
-def get_serv_info(id: int):
+def get_serv_name_by_id(id: int):
     with engine.connect() as conn:
         res = conn.execute(text("SELECT name FROM services WHERE id = :id"), {'id' : id}).fetchone()
     return res.name     
     
+@safe_db_query
+def get_serv_id_by_name(name: str) -> str:
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT id FROM services WHERE name = :name"), {'name' : name}).fetchone()
+    return res.id
+
+@safe_db_query
+def check_slot(date, time):
+    query = text("""
+        SELECT id 
+        FROM schedule 
+        WHERE slot_date = :date 
+          AND slot_time = :time 
+          AND status = 'Available'
+    """)
+    
+    with engine.connect() as conn:
+        res = conn.execute(query, {"date": date, "time": time}).fetchone()
+    
+    if res is None:
+        return False
+        
+    return int(res.id)

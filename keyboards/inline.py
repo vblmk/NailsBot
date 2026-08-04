@@ -15,7 +15,8 @@ def admin_keyboard():
            InlineKeyboardButton("Розклад", callback_data="btn_schedule"),
            InlineKeyboardButton("Запис вручну", callback_data="btn_manualAppoint"),
            InlineKeyboardButton("Додати послугу", callback_data="btn_addService"),
-           InlineKeyboardButton("Видалити послугу", callback_data="btn_deleteService")
+           InlineKeyboardButton("Видалити послугу", callback_data="btn_deleteService"),
+           InlineKeyboardButton("Послуги", callback_data="btn_price")
            )
     
     return kb

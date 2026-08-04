@@ -61,7 +61,6 @@ def get_schedule():
         df['Time'] = df['Time'].apply(lambda x: x.strftime("%H:%M") if hasattr(x, 'strftime') else str(x))
     return df
 
-
 @safe_db_query
 def appoint(slot_id, name, phone, service_id, user_id=None):
     with engine.begin() as conn:
@@ -98,7 +97,7 @@ def appoint(slot_id, name, phone, service_id, user_id=None):
         result2 = conn.execute(query_service, {"service_id": service_id}).mappings().first()
 
     if not result1 or not result2:
-        return True
+        return False
 
     date_str = result1['slot_date'].strftime("%d-%m-%Y")
     time_str = result1['slot_time'].strftime("%H:%M")
