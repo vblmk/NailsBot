@@ -50,6 +50,7 @@ def generate_schedule():
         df_new_schedule_psql.to_sql('schedule', conn, if_exists='append', index=False)
 
     print(f"Згенеровано розклад на {days_to_generate} днів у PostgreSQL та Google Sheets!")
+    return True
 
 @safe_db_query
 def get_schedule():
@@ -64,6 +65,9 @@ def get_schedule():
 @safe_db_query
 def appoint(slot_id, name, phone, service_id, user_id=None):
     with engine.begin() as conn:
+        if user_id is None:
+            result = conn.execute(text("INSERT INTO users (name, phone_number) VALUES (:name, :phone_number)"), {"name" : name, "phone_number" : phone})
+            
         result = conn.execute(text("""
             UPDATE schedule
             SET client_name  = :name,

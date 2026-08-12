@@ -4,7 +4,7 @@ from telebot.types import Message, CallbackQuery
 from utils.decorators import is_admin
 from datetime import datetime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from services.schedule_services import appoint
+from services.schedule_services import appoint, generate_schedule
 from keyboards.pagination import create_pagination_kb_date_schedule, create_pagination_kb_services_del
 from keyboards.inline import admin_keyboard
 from services.db_services import get_schedule_info, get_service_and_slot_info, add_service_db, delete_service, get_serv_name_by_id, get_serv_id_by_name, check_slot
@@ -285,3 +285,18 @@ def register_admin_handlers(bot: TeleBot):
                                     message_id=call.message.message_id,
                                     text=f"Виникла технічна помилка при спробі видалити послугу {serv_name}\n\nЗверніться до адміністратора або спробуйте пізніше",
                                     reply_markup=admin_keyboard())
+            
+    @bot.callback_query_handler(func=lambda call: call.data == "gen_sched")
+    def gen_sched(call: CallbackQuery):
+        bot.answer_callback_query(call.id)
+        
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                        message_id=call.message.message_id,
+                        text="Генерація розкладу...")
+        
+        if generate_schedule():
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                  message_id=call.message.message_id,
+                                  text="Розклад успішно згенеровано",
+                                  reply_markup=admin_keyboard())
+        

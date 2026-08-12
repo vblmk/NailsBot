@@ -58,19 +58,19 @@ def update_user_tgid(phone, tg_id):
         return False
     
 @safe_db_query
-def get_user_visits(tg_id: int):
+def get_user_visits(phone: int):
         res_text = ''
 
         query = text("""
             SELECT s.slot_date, s.slot_time, s.client_name, serv.name as service_name
             FROM schedule s
             LEFT JOIN services serv ON s.service_id = serv.id
-            WHERE s.user_id = :tg_id AND s.status = 'Booked'
+            WHERE s.client_phone = :phone AND s.status = 'Booked'
             ORDER BY s.slot_date, s.slot_time
         """)
 
         with engine.connect() as conn:
-            visits = conn.execute(query, {"tg_id": tg_id}).mappings().all()
+            visits = conn.execute(query, {"phone": str(phone)}).mappings().all()
 
         if visits:
             for row in visits:
@@ -191,3 +191,8 @@ def check_slot(date, time):
         return False
         
     return int(res.id)
+
+@safe_db_query
+def get_user_phone_by_id(tg_id: int):
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT phone_number FROM users WHERE tg_id = :tg_id"), {"tg_id" : tg_id}).fetchone().phone_number

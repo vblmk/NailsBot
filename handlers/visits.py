@@ -1,6 +1,7 @@
 from keyboards.inline import initial_keyboard
 from telebot import TeleBot
-from services.db_services import get_user_visits
+from services.db_services import get_user_visits, get_user_phone_by_id
+from telebot.types import CallbackQuery
 
 def register_visits_handlers(bot: TeleBot):
     @bot.message_handler(commands=["myvisits"])
@@ -22,12 +23,12 @@ def register_visits_handlers(bot: TeleBot):
                          reply_markup=initial_keyboard())
             
     @bot.callback_query_handler(func=lambda call: call.data == "btn_myVisits")
-    def cb_btn_myVisits(call):
+    def cb_btn_myVisits(call: CallbackQuery):
         bot.answer_callback_query(call.id)
         
-        tg_id = call.from_user.id
+        phone = get_user_phone_by_id(call.from_user.id)
         
-        res_text = get_user_visits(tg_id)
+        res_text = get_user_visits(phone)
         text_to_send = ""
         
         if res_text is None:    
