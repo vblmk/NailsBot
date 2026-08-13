@@ -1,5 +1,6 @@
 from bot_config import ADMIN_IDS
 from telebot import TeleBot
+from telebot.types import Message, CallbackQuery
 from bot_config import user_df
 from keyboards.inline import initial_keyboard, admin_keyboard
 from services.user_services import user_exists_by_id, register_user
@@ -25,14 +26,17 @@ def register_start_handler(bot: TeleBot):
             )
             bot.register_next_step_handler(msg, get_phone, msg)
 
-    def get_phone(message, msg):
+    def get_phone(message, msg: Message):
         if message.contact:
             phone = message.contact.phone_number
         elif message.text:
             phone = message.text.strip()
         else:
-            bot.send_message(message.chat.id, "Будь ласка, надішліть номер телефону")
-            bot.register_next_step_handler(message, get_phone, msg)
+            bot.delete_message(chat_id=msg.chat.id, message_id=msg.message_id)
+            bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+            
+            msg = bot.send_message(message.chat.id, "Будь ласка, надішліть номер телефону")
+            bot.register_next_step_handler(msg, get_phone, msg)
             return
         
         user = get_user_by_phone(phone)
@@ -43,26 +47,39 @@ def register_start_handler(bot: TeleBot):
                 
                 if not success:
                     bot.edit_message_text(
-                        chat_id=message.chat.id, 
+                        chat_id=msg.chat.id, 
                         message_id=msg.id, 
                         text="Технічна помилка при авторизації. Будь ласка, спробуйте пізніше або напишіть адміністратору.", 
                     )
                     return
 
             bot.edit_message_text(
-                chat_id=message.chat.id, 
+                chat_id=msg.chat.id, 
                 message_id=msg.id, 
                 text=f"Ви є в списку клієнтів. Вас авторизовано під ім'ям {user.name}.", 
                 reply_markup=initial_keyboard()
             )
         else:
-            user_data = {'msg': msg, 'phone': phone}
-            next_msg = bot.send_message(message.chat.id, "Як до вас можна звертатись?")
+            bot.delete_message(chat_id=message.chat.id,
+                                message_id=message.message_id)
+            
+            next_msg = bot.edit_message_text(chat_id=message.chat.id,
+                                             message_id=msg.message_id,
+                                             text="Як до вас можна звертатись?")
+            
+            user_data = {'msg': next_msg, 'phone': phone}
+            
             bot.register_next_step_handler(next_msg, get_name, user_data)
 
     def get_name(message, user_data):
+        bot.delete_message(chat_id=message.chat.id,
+                    message_id=message.message_id)
+        
         if not message.text:
             next_msg = bot.send_message(message.chat.id, "Будь ласка, введіть ваше ім'я текстом:")
+            
+            user_data['msg'] = next_msg
+            
             bot.register_next_step_handler(next_msg, get_name, user_data)
             return
 
