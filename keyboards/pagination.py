@@ -77,7 +77,6 @@ def create_pagination_kb_date(df, service_id, page=0, limit=5):
     kb.add(InlineKeyboardButton("🏠 Головне меню", callback_data="btn_mainMenu"))
     return kb
 
-
 def create_pagination_kb_time(df, date, service_id, page=0, limit=5):
     kb = InlineKeyboardMarkup()
     df_filtered = df[df['Date'] == date]
@@ -86,7 +85,7 @@ def create_pagination_kb_time(df, date, service_id, page=0, limit=5):
     end = start + limit
     current_rows = df_filtered.iloc[start:end]
 
-    for index, row in current_rows.iterrows():
+    for _, row in current_rows.iterrows():
         btn_text = f"{row['Time']}"
         kb.add(InlineKeyboardButton(btn_text, callback_data=f"book_{row['id']}_{service_id}"))
 
@@ -110,3 +109,6 @@ def create_pagination_kb_services_del(page=0, limit=5):
             kb.add(InlineKeyboardButton(row['name'], callback_data=f"serv_del_{row['id']}"))
                     
     return kb
+
+# def create_pagination_kb_dates_appoint(page=0, limit=5):
+    

@@ -5,9 +5,9 @@ from utils.decorators import is_admin
 from datetime import datetime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from services.schedule_services import appoint, generate_schedule
-from keyboards.pagination import create_pagination_kb_date_schedule, create_pagination_kb_services_del
-from keyboards.inline import admin_keyboard
-from services.db_services import get_schedule_info, get_service_and_slot_info, add_service_db, delete_service, get_serv_name_by_id, get_serv_id_by_name, check_slot
+from keyboards.pagination import create_pagination_kb_date_schedule, create_pagination_kb_services_del, create_pagination_kb_date, create_pagination_kb_time
+from keyboards.inline import admin_keyboard, mainmenu_keyboard
+from services.db_services import get_schedule_info, add_service_db, delete_service, get_serv_name_by_id, get_serv_id_by_name, check_slot
 from utils.formatters import is_float, format_duration_to_db, format_duration_from_db
 
 serv_data = {}
@@ -32,34 +32,34 @@ def register_admin_handlers(bot: TeleBot):
     @bot.message_handler(commands=["appoint"])
     @is_admin
     def handle_manual_appoint_date(message: Message):
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("Головне меню", callback_data="btn_mainMenu"))
         appoint_data[message.from_user.id] = {}
         
-        msg = bot.send_message(message.chat.id, "СТВОРЕННЯ НОВОГО ЗАПИСУ\n\nНадішліть дату (ДД-ММ-РРРР):", reply_markup=kb)
+        msg = bot.send_message(message.chat.id, "СТВОРЕННЯ НОВОГО ЗАПИСУ\n\nНадішліть дату (ДД-ММ-РРРР):", reply_markup=mainmenu_keyboard())
         
-        bot.register_next_step_handler(msg, handle_manual_appoint_time, msg, kb)
+        bot.register_next_step_handler(msg, handle_manual_appoint_time, msg)
         
-    def handle_manual_appoint_time(message: Message, msg_to_edit: Message, kb: InlineKeyboardMarkup):
+    def handle_manual_appoint_time(message: Message, msg_to_edit: Message):
         bot.delete_message(chat_id=message.chat.id, 
                             message_id=message.message_id)
         try:
             appoint_data[message.from_user.id]['date'] = datetime.strptime(message.text.replace(".", "-"), "%d-%m-%Y").strftime("%Y-%m-%d")
-        except ValueError:
+        except:
             msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                         message_id=msg_to_edit.message_id,
                         text="Невірний формат дати",
-                        reply_markup=admin_keyboard())
+                        reply_markup=mainmenu_keyboard())
+            return 
+        
         appoint_data[message.from_user.id]['date_str'] = message.text
         
         msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                               message_id=msg_to_edit.message_id,
                               text=f"СТВОРЕННЯ НОВОГО ЗАПИСУ\n\nДата: {message.text}\nНадішліть час:",
-                              reply_markup=kb)
+                              reply_markup=mainmenu_keyboard())
 
-        bot.register_next_step_handler(msg, handle_manual_appoint_name, msg, kb)
+        bot.register_next_step_handler(msg, handle_manual_appoint_name, msg)
     
-    def handle_manual_appoint_name(message: Message, msg_to_edit: Message, kb: InlineKeyboardMarkup):
+    def handle_manual_appoint_name(message: Message, msg_to_edit: Message):
         bot.delete_message(chat_id=message.chat.id, 
                             message_id=message.message_id)
         
@@ -71,25 +71,25 @@ def register_admin_handlers(bot: TeleBot):
             msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                                 message_id=msg_to_edit.message_id,
                                 text=f"СТВОРЕННЯ НОВОГО ЗАПИСУ\n\nДата: {appoint_data[message.from_user.id]['date_str']}\nЧас: {appoint_data[message.from_user.id]['time']}\nНадішліть ім'я клієнта:",
-                                reply_markup=kb)
+                                reply_markup=mainmenu_keyboard())
         
         elif check == False:
             msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                     message_id=msg_to_edit.message_id,
                     text="Час вже зайнятий або ще не доданий в календар.\n\nСпробуйте ще раз: /appoint",
-                    reply_markup=kb)
+                    reply_markup=mainmenu_keyboard())
             return
         
         if check is None:
             msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                     message_id=msg_to_edit.message_id,
                     text="Неправильний формат дати або часу.\n\nСпробуйте ще раз: /appoint",
-                    reply_markup=kb)
+                    reply_markup=mainmenu_keyboard())
             return
             
-        bot.register_next_step_handler(msg, handle_manual_appoint_phone, msg, kb)
+        bot.register_next_step_handler(msg, handle_manual_appoint_phone, msg)
         
-    def handle_manual_appoint_phone(message: Message, msg_to_edit: Message, kb: InlineKeyboardMarkup):
+    def handle_manual_appoint_phone(message: Message, msg_to_edit: Message):
         bot.delete_message(chat_id=message.chat.id, 
                     message_id=message.message_id) 
         
@@ -97,11 +97,11 @@ def register_admin_handlers(bot: TeleBot):
         msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                               message_id=msg_to_edit.message_id, 
                               text=f"СТВОРЕННЯ НОВОГО ЗАПИСУ\n\nДата: {appoint_data[message.from_user.id]['date_str']}\nЧас: {appoint_data[message.from_user.id]['time']}\nІм'я: {appoint_data[message.from_user.id]['name']}\nНадішліть номер телефону клієнта:",
-                              reply_markup=kb)
+                              reply_markup=mainmenu_keyboard())
     
-        bot.register_next_step_handler(msg, handle_manual_appoint_service, msg, kb)
+        bot.register_next_step_handler(msg, handle_manual_appoint_service, msg)
         
-    def handle_manual_appoint_service(message: Message, msg_to_edit: Message, kb: InlineKeyboardMarkup):
+    def handle_manual_appoint_service(message: Message, msg_to_edit: Message):
         bot.delete_message(chat_id=message.chat.id, 
                     message_id=message.message_id)
         
@@ -109,11 +109,11 @@ def register_admin_handlers(bot: TeleBot):
         msg = bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                               message_id=msg_to_edit.message_id,
                               text=f"СТВОРЕННЯ НОВОГО ЗАПИСУ\n\nДата: {appoint_data[message.from_user.id]['date_str']}\nЧас: {appoint_data[message.from_user.id]['time']}\nІм'я: {appoint_data[message.from_user.id]['name']}\nНомер телефону: {appoint_data[message.from_user.id]['phone']}\nНадішліть назву послуги:",
-                              reply_markup=kb)
+                              reply_markup=mainmenu_keyboard())
     
-        bot.register_next_step_handler(msg, handle_manual_appoint, msg, kb)
+        bot.register_next_step_handler(msg, handle_manual_appoint, msg)
         
-    def handle_manual_appoint(message: Message, msg_to_edit: Message, kb: InlineKeyboardMarkup):
+    def handle_manual_appoint(message: Message, msg_to_edit: Message):
         bot.delete_message(chat_id=message.chat.id, 
                             message_id=message.message_id)
         
@@ -124,19 +124,18 @@ def register_admin_handlers(bot: TeleBot):
             bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                                     message_id=msg_to_edit.message_id,
                                     text=f"Не знайдено послуги за назвою {message.text}.\n\nСпробуйте ще раз: /appoint", parse_mode='HTML',
-                                    reply_markup=kb)
+                                    reply_markup=mainmenu_keyboard())
             return
         
         bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                         message_id=msg_to_edit.message_id,
-                        text="Створення запису...",
-                        reply_markup=kb)
+                        text="Створення запису...")
         
         if appoint(slot_id, name, phone, serv_id) == True:
             bot.edit_message_text(chat_id=msg_to_edit.chat.id,
                                     message_id=msg_to_edit.message_id,
                                     text=f"<b>✅ Запис створено!</b>\n\n👤 {name}\n📅 Дата: {date_str}\n⏰ Час: {time}\nТелефон: {phone}\n💅 {message.text}", parse_mode='HTML',
-                                    reply_markup=kb)
+                                    reply_markup=mainmenu_keyboard())
     
             
     @bot.callback_query_handler(func=lambda call: call.data == "btn_addService")

@@ -21,3 +21,7 @@ def admin_keyboard():
            )
     
     return kb
+
+def mainmenu_keyboard():
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("Головне меню", callback_data="btn_mainMenu"))
