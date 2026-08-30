@@ -4,6 +4,7 @@ from bot_config import user_df
 from keyboards.inline import initial_keyboard, admin_keyboard
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from services.db_services import get_price
+from handlers.admin import appoint_data
 
 def register_common_handlers(bot: TeleBot):
     
@@ -11,8 +12,8 @@ def register_common_handlers(bot: TeleBot):
     def cb_main_menu(call):
         bot.clear_step_handler_by_chat_id(call.message.chat.id)
         bot.answer_callback_query(call.id)
-        bot.clear_step_handler_by_chat_id(call.message.chat.id)
         user_df.pop(call.from_user.id, None)
+        appoint_data.pop(call.from_user.id, None)
         
         if call.from_user.id in ADMIN_IDS:            
             bot.edit_message_text(
@@ -30,7 +31,7 @@ def register_common_handlers(bot: TeleBot):
             )
 
     @bot.callback_query_handler(func=lambda call: call.data == "btn_price")
-    def cd_btn_price(call):
+    def cb_btn_price(call):
         bot.answer_callback_query(call.id)
         
         user_df.pop(call.from_user.id, None)
@@ -54,3 +55,7 @@ def register_common_handlers(bot: TeleBot):
             text="Запис скасовано",
             reply_markup=initial_keyboard()
         )
+        
+    @bot.callback_query_handler(func=lambda call: call.data == "pass")
+    def btn_pass(call):
+        bot.answer_callback_query(call.id, "Це пуста клітинка!")

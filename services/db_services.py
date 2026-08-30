@@ -196,3 +196,25 @@ def check_slot(date, time):
 def get_user_phone_by_id(tg_id: int):
     with engine.connect() as conn:
         return conn.execute(text("SELECT phone_number FROM users WHERE tg_id = :tg_id"), {"tg_id" : tg_id}).fetchone().phone_number
+    
+@safe_db_query
+def get_date_times(date):
+    with engine.connect() as conn:
+        r = conn.execute(text("SELECT slot_time FROM schedule WHERE slot_date = :date and status = 'Available'"), {'date' : date}).mappings()
+        
+    if r is None:
+        return False
+    
+    return r
+
+@safe_db_query
+def get_services():
+    with engine.connect() as conn:
+        r = conn.execute(text("SELECT id, name, duration FROM services")).mappings()
+    return r
+
+@safe_db_query
+def get_slot_id(date, time):
+    with engine.connect() as conn:
+        r = conn.execute(text("SELECT id FROM schedule WHERE slot_date = :date AND slot_time = :time"), {'date' : date, 'time' : time}).fetchone()
+    return r.id

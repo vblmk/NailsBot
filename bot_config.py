@@ -18,3 +18,19 @@ ADMIN_IDS = [int(x.strip()) for x in os.getenv('ADMIN_IDS', '').split(",") if x.
 
 bot = telebot.TeleBot(TOKEN)
 user_df = {}
+
+months_ua = [
+    "",
+    "Січень",
+    "Лютий",
+    "Березень",
+    "Квітень",
+    "Травень",
+    "Червень",
+    "Липень",
+    "Серпень",
+    "Вересень",
+    "Жовтень",
+    "Листопад",
+    "Грудень",
+]

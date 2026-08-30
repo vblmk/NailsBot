@@ -1,4 +1,5 @@
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+from datetime import datetime
 
 def initial_keyboard():
     kb = InlineKeyboardMarkup(row_width=1)
@@ -10,10 +11,12 @@ def initial_keyboard():
     return kb
 
 def admin_keyboard():
+    now = datetime.now()
+    
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
            InlineKeyboardButton("Розклад", callback_data="btn_schedule"),
-           InlineKeyboardButton("Запис вручну", callback_data="btn_manualAppoint"),
+           InlineKeyboardButton("Запис вручну", callback_data=f"manualAppointChooseDate_{now.month}-{now.year}"),
            InlineKeyboardButton("Додати послугу", callback_data="btn_addService"),
            InlineKeyboardButton("Видалити послугу", callback_data="btn_deleteService"),
            InlineKeyboardButton("Послуги", callback_data="btn_price"),
@@ -23,5 +26,13 @@ def admin_keyboard():
     return kb
 
 def mainmenu_keyboard():
-        kb = InlineKeyboardMarkup(row_width=1)
-        kb.add(InlineKeyboardButton("Головне меню", callback_data="btn_mainMenu"))
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("Головне меню", callback_data="btn_mainMenu"))
+    
+    return kb
+        
+def confirm_manapp_keyboard():
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(InlineKeyboardButton("Запис✅", callback_data='manapp_confirm'), InlineKeyboardButton("Скасувати❌", callback_data='btn_mainMenu'))
+    
+    return kb
