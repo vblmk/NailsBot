@@ -119,27 +119,6 @@ def get_schedule_info(date, bot):
         return res_text
 
 @safe_db_query
-def get_service_and_slot_info(service_name, date_reformatted, time_obj):
-    with engine.connect() as conn:
-        service = conn.execute(
-            text("SELECT id, name FROM services WHERE name = :name"),
-            {'name': service_name}
-        ).fetchone()
-
-        slot = conn.execute(
-            text("SELECT id, status FROM schedule WHERE slot_date = :slot_date AND slot_time = :slot_time"),
-            {'slot_date': date_reformatted, 'slot_time': time_obj}
-        ).fetchone()
-
-        if not service:
-            return "No service"
-
-        if not slot or slot.status == 'Booked':
-            return "No slot"
-        
-    return (service.id, service.name, slot.id)
-
-@safe_db_query
 def add_service_db(name, price, duration):
     with engine.connect() as conn:
         conn.execute(text("select * from schedule"))
@@ -218,3 +197,22 @@ def get_slot_id(date, time):
     with engine.connect() as conn:
         r = conn.execute(text("SELECT id FROM schedule WHERE slot_date = :date AND slot_time = :time"), {'date' : date, 'time' : time}).fetchone()
     return r.id
+
+@safe_db_query
+def get_days_counts(month, year):
+    sql = text(
+        """
+        SELECT EXTRACT(DAY FROM slot_date) as day_num, COUNT(*) as cnt 
+        FROM schedule 
+        WHERE status = 'Available' 
+          AND EXTRACT(MONTH FROM slot_date) = :m 
+          AND EXTRACT(YEAR FROM slot_date) = :y 
+        GROUP BY slot_date
+    """
+    )
+
+    with engine.connect() as conn:
+        result = conn.execute(sql, {"m": month, "y": year}).mappings()
+        counts_by_day = {int(row["day_num"]): row["cnt"] for row in result}
+        
+    return counts_by_day

@@ -5,9 +5,9 @@ from utils.decorators import is_admin
 from datetime import datetime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from services.schedule_services import appoint, generate_schedule
-from keyboards.pagination import create_pagination_kb_date_schedule, create_kb_services_del, create_pagination_kb_dates_appoint, create_pagination_kb_time, create_kb_time_manapp, create_kb_service_manappp
+from keyboards.pagination import create_pagination_kb_date_schedule, create_kb_services_del, create_pagination_kb_dates_appoint, create_kb_time_manapp, create_kb_service_manappp
 from keyboards.inline import admin_keyboard, mainmenu_keyboard, confirm_manapp_keyboard
-from services.db_services import get_schedule_info, add_service_db, delete_service, get_serv_name_by_id, get_serv_id_by_name, check_slot, get_slot_id
+from services.db_services import get_schedule_info, add_service_db, delete_service, get_serv_name_by_id, get_slot_id
 from utils.formatters import is_float, format_duration_to_db, format_duration_from_db
 
 serv_data = {}
@@ -234,7 +234,7 @@ def register_admin_handlers(bot: TeleBot):
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id= call.message.message_id,
                               text = f"Дата: {date_str}\n\nВиберіть час:",
-                              reply_markup=create_kb_time_manapp(call.from_user.id, date_str))
+                              reply_markup=create_kb_time_manapp(date_str))
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("manapp_time_"))
     @is_admin

@@ -1,8 +1,6 @@
-from services.db_services import get_date_times, get_services
+from services.db_services import get_date_times, get_services, get_days_counts
 from services.schedule_services import get_schedule
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from sqlalchemy import text
-from database import engine
 from datetime import datetime
 import calendar
 
@@ -32,10 +30,8 @@ def create_pagination_kb_date_schedule(page=0, limit=5):
 
 def create_pagination_kb_services(page=0, limit=5):
     kb = InlineKeyboardMarkup()
-    query = text("SELECT id, name FROM services")
-
-    with engine.connect() as conn:
-        services_list = [dict(row) for row in conn.execute(query).mappings()]
+    
+    services_list = get_services()
 
     start = page * limit
     end = start + limit
@@ -104,12 +100,11 @@ def create_pagination_kb_time(df, date, service_id, page=0, limit=5):
     return kb
 
 def create_kb_services_del(page=0, limit=5):
-    with engine.connect() as conn:
-        kb = InlineKeyboardMarkup(row_width=1)        
-        services = conn.execute(text("SELECT id, name FROM services")).mappings().all()
+    kb = InlineKeyboardMarkup(row_width=1)        
+    services = get_services()
         
-        for row in services:
-            kb.add(InlineKeyboardButton(row['name'], callback_data=f"serv_del_{row['id']}"))
+    for row in services:
+        kb.add(InlineKeyboardButton(row['name'], callback_data=f"serv_del_{row['id']}"))
                     
     return kb
 
@@ -123,20 +118,7 @@ def create_pagination_kb_dates_appoint(month=None, year=None):
 
     fwday, days_in_month = calendar.monthrange(year, month)
 
-    sql = text(
-        """
-        SELECT EXTRACT(DAY FROM slot_date) as day_num, COUNT(*) as cnt 
-        FROM schedule 
-        WHERE status = 'Available' 
-          AND EXTRACT(MONTH FROM slot_date) = :m 
-          AND EXTRACT(YEAR FROM slot_date) = :y 
-        GROUP BY slot_date
-    """
-    )
-
-    with engine.connect() as conn:
-        result = conn.execute(sql, {"m": month, "y": year}).mappings()
-        counts_by_day = {int(row["day_num"]): row["cnt"] for row in result}
+    counts_by_day = get_days_counts(month, year)
 
     for _ in range(fwday):
         btns.append(InlineKeyboardButton(" - ", callback_data="pass"))
@@ -179,7 +161,7 @@ def create_pagination_kb_dates_appoint(month=None, year=None):
 
     return kb
 
-def create_kb_time_manapp(user_id, date):
+def create_kb_time_manapp(date):
     kb = InlineKeyboardMarkup(row_width=1)
     
     res = get_date_times(date)
